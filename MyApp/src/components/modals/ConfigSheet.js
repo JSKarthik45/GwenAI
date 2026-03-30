@@ -18,7 +18,7 @@ export function ConfigSheet({ visible, onClose, translateY, overlayOpacity }) {
 
           <View style={styles.configRow}>
             <Text style={styles.configLabel}>Selected model</Text>
-            <Text style={styles.configValue}>GPT-5.3-Codex</Text>
+            <Text style={styles.configValue}>qwen-2.5-coder-32b</Text>
           </View>
 
           <PrimaryButton onPress={() => {}} style={styles.githubBtn}>
@@ -81,13 +81,12 @@ const styles = StyleSheet.create({
   },
   configLabel: {
     color: theme.colors.muted,
-    fontSize: 12,
+    ...theme.typography.caption,
     marginBottom: 5,
   },
   configValue: {
     color: theme.colors.text,
-    fontSize: 15,
-    fontWeight: '700',
+    ...theme.typography.bodyStrong,
   },
   githubBtn: {
     height: 50,
@@ -99,13 +98,12 @@ const styles = StyleSheet.create({
   },
   githubBtnText: {
     color: theme.colors.text,
-    fontSize: 16,
-    fontWeight: '700',
+    ...theme.typography.bodyStrong,
   },
   sheetHint: {
     color: theme.colors.muted,
     marginTop: 14,
-    fontSize: 12,
+    ...theme.typography.caption,
     lineHeight: 18,
   },
 });

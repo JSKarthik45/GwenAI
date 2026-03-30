@@ -1,4 +1,4 @@
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Backdrop } from '../common/Backdrop';
 import { PrimaryButton } from '../common/PrimaryButton';
 import theme from '../../theme/theme';
@@ -21,28 +21,33 @@ export function ProjectsDrawer({
         <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
           <View style={styles.drawerTopRow}>
             <Text style={styles.drawerTitle}>Projects</Text>
-            <PrimaryButton
-              title="+ New Task"
-              onPress={onNewTask}
-              style={styles.newTaskBtn}
-              textStyle={styles.newTaskBtnText}
-            />
+            <Pressable onPress={onClose} style={styles.closeButton} hitSlop={10}>
+              <Text style={styles.closeText}>✕</Text>
+            </Pressable>
           </View>
 
-          <View style={styles.projectList}>
+          <ScrollView
+            style={styles.projectList}
+            contentContainerStyle={styles.projectListContent}
+            showsVerticalScrollIndicator={false}
+          >
             {projects.map((project) => (
               <Pressable key={project.id} style={styles.projectItem}>
                 <Text style={styles.projectName}>{project.name}</Text>
                 <Text style={styles.projectMeta}>Updated {project.updated}</Text>
               </Pressable>
             ))}
+          </ScrollView>
+
+          <View style={styles.footerRow}>
+            <PrimaryButton
+              title="+ New MVP"
+              onPress={onNewTask}
+              style={styles.newTaskBtn}
+              textStyle={styles.newTaskBtnText}
+            />
           </View>
 
-          <View style={styles.profileCompact}>
-            <Text style={styles.profileName}>Karthik J</Text>
-            <Text style={styles.profileMail}>karthik@example.com</Text>
-            <Text style={styles.profilePlan}>Pro Builder</Text>
-          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -63,7 +68,7 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: theme.colors.border,
     paddingHorizontal: 14,
-    paddingTop: 18,
+    paddingTop: 35,
     paddingBottom: 14,
   },
   drawerTopRow: {
@@ -76,20 +81,48 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     ...theme.typography.section,
   },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.colors.panel,
+  },
+  closeText: {
+    color: theme.colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: -1,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingTop: 12,
+    paddingBottom: 12,
+    paddingHorizontal: 10,
+  },
   newTaskBtn: {
     borderRadius: theme.radius.sm,
-    minHeight: 36,
-    minWidth: 40,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    minHeight: 40,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 4,
+    alignSelf: 'stretch',
+    width: '100%',
   },
   newTaskBtnText: {
-    fontSize: 12,
+    ...theme.typography.bodyStrong,
   },
   projectList: {
     flex: 1,
+  },
+  projectListContent: {
     gap: 10,
     paddingTop: 6,
+    paddingBottom: 12,
   },
   projectItem: {
     backgroundColor: theme.colors.panel,
@@ -101,33 +134,11 @@ const styles = StyleSheet.create({
   },
   projectName: {
     color: theme.colors.text,
-    fontWeight: '700',
-    fontSize: 14,
+    ...theme.typography.bodyStrong,
   },
   projectMeta: {
     color: theme.colors.muted,
     marginTop: 4,
-    fontSize: 12,
-  },
-  profileCompact: {
-    marginTop: 12,
-    borderTopColor: theme.colors.border,
-    borderTopWidth: 1,
-    paddingTop: 12,
-    gap: 2,
-  },
-  profileName: {
-    color: theme.colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  profileMail: {
-    color: theme.colors.muted,
-    fontSize: 12,
-  },
-  profilePlan: {
-    color: theme.colors.accentText,
-    fontSize: 12,
-    fontWeight: '700',
+    ...theme.typography.caption,
   },
 });

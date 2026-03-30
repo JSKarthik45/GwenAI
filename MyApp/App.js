@@ -14,6 +14,7 @@ const SHEET_HEIGHT = 340;
 
 export default function App() {
   const [prompt, setPrompt] = useState('');
+  const [lastSentPrompt, setLastSentPrompt] = useState('');
   const [screen, setScreen] = useState('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -31,7 +32,7 @@ export default function App() {
         {
           translateY: pageAnim.interpolate({
             inputRange: [0, 1],
-            outputRange: [18, 0],
+            outputRange: [20, 0],
           }),
         },
       ],
@@ -44,10 +45,11 @@ export default function App() {
   }, []);
 
   const animatePageIn = () => {
+    pageAnim.stopAnimation();
     pageAnim.setValue(0);
     Animated.timing(pageAnim, {
       toValue: 1,
-      duration: 340,
+      duration: 1000,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
@@ -90,16 +92,19 @@ export default function App() {
 
   const openSheet = () => {
     setSheetVisible(true);
+    sheetY.stopAnimation();
+    sheetOpacity.stopAnimation();
     Animated.parallel([
-      Animated.timing(sheetY, {
+      Animated.spring(sheetY, {
         toValue: 0,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
+        stiffness: 220,
+        damping: 22,
+        mass: 1,
         useNativeDriver: true,
       }),
       Animated.timing(sheetOpacity, {
         toValue: 1,
-        duration: 240,
+        duration: 220,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
       }),
@@ -107,16 +112,19 @@ export default function App() {
   };
 
   const closeSheet = () => {
+    sheetY.stopAnimation();
+    sheetOpacity.stopAnimation();
     Animated.parallel([
-      Animated.timing(sheetY, {
+      Animated.spring(sheetY, {
         toValue: SHEET_HEIGHT,
-        duration: 220,
-        easing: Easing.in(Easing.cubic),
+        stiffness: 200,
+        damping: 24,
+        mass: 1,
         useNativeDriver: true,
       }),
       Animated.timing(sheetOpacity, {
         toValue: 0,
-        duration: 220,
+        duration: 180,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
@@ -124,11 +132,20 @@ export default function App() {
   };
 
   const onSend = () => {
+    setLastSentPrompt(prompt);
+    setPrompt('');
     setScreen('qr');
     animatePageIn();
   };
 
   const onBackHome = () => {
+    setPrompt('');
+    setScreen('home');
+    animatePageIn();
+  };
+
+  const onCreateNewMvp = () => {
+    closeDrawer();
     setScreen('home');
     animatePageIn();
   };
@@ -148,7 +165,7 @@ export default function App() {
               onOpenConfig={openSheet}
             />
           ) : (
-            <QRScreen prompt={prompt} onBack={onBackHome} />
+            <QRScreen prompt={lastSentPrompt} onBack={onBackHome} />
           )}
         </Animated.View>
 
@@ -158,7 +175,7 @@ export default function App() {
           translateX={drawerX}
           overlayOpacity={drawerOpacity}
           projects={projects}
-          onNewTask={() => {}}
+          onNewTask={onCreateNewMvp}
         />
 
         <ConfigSheet

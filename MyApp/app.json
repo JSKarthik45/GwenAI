@@ -1,30 +1,30 @@
 {
   "expo": {
-    "name": "MyApp",
-    "slug": "MyApp",
-    "version": "0.1.0",
+    "name": "Gwen",
+    "slug": "gwen",
+    "version": "0.1.3",
     "orientation": "portrait",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/logo.jpg",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/logo.png",
+      "image": "./assets/logo.jpg",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.png",
+        "foregroundImage": "./assets/logo.jpg",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.jskarthik.gwen"
     },
     "web": {
-      "favicon": "./assets/logo.png"
+      "favicon": "./assets/logo.jpg"
     }
   }
 }

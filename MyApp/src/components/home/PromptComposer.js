@@ -1,8 +1,21 @@
+import { useEffect, useState } from 'react';
 import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { PrimaryButton } from '../common/PrimaryButton';
 import theme from '../../theme/theme';
 
 export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig }) {
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
   return (
     <View style={styles.composerDock}>
       <View style={styles.promptCard}>
@@ -19,12 +32,20 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig })
         />
 
         <View style={styles.actionRow}>
-          <Pressable style={styles.configCircle} onPress={onOpenConfig}>
-            <Text style={styles.configCircleText}>⚙</Text>
-          </Pressable>
+          {!keyboardVisible && (
+            <Pressable style={styles.configCircle} onPress={onOpenConfig}>
+              <Text style={styles.configCircleText}>⚙</Text>
+            </Pressable>
+          )}
 
-          <PrimaryButton onPress={onSend} style={styles.sendButton}>
-            <Text style={styles.sendArrow}>➤</Text>
+          <PrimaryButton
+            onPress={onSend}
+            style={[styles.sendButton, keyboardVisible && styles.sendButtonWide]}
+            disabled={!prompt?.trim()}
+          >
+            <Text style={[styles.sendArrow, keyboardVisible && styles.sendTextWide]}>
+              {keyboardVisible ? 'Send' : '➤'}
+            </Text>
           </PrimaryButton>
         </View>
       </View>
@@ -87,10 +108,21 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     paddingHorizontal: 0,
   },
+  sendButtonWide: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
+    borderRadius: theme.radius.md,
+  },
   sendArrow: {
     color: theme.colors.text,
     fontSize: 21,
     fontWeight: '800',
     marginLeft: 2,
+  },
+  sendTextWide: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 0,
   },
 });

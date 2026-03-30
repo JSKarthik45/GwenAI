@@ -19,7 +19,11 @@ export function HomeScreen({ prompt, onChangePrompt, onSend, onOpenProjects, onO
 
   return (
     <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.homeWrap}>
+      <KeyboardAvoidingView
+        style={styles.homeWrap}
+        behavior={Platform.select({ ios: 'padding', android: 'padding' })}
+        keyboardVerticalOffset={Platform.select({ ios: 10, android: 0 })}
+      >
         <Pressable style={styles.menuButton} onPress={handleOpenProjects}>
           <Text style={styles.menuButtonText}>≡</Text>
         </Pressable>
@@ -32,11 +36,7 @@ export function HomeScreen({ prompt, onChangePrompt, onSend, onOpenProjects, onO
           </Text>
         </View>
 
-        <KeyboardAvoidingView
-          style={styles.composerWrap}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
+        <View style={styles.composerWrap}>
           <PromptComposer
             prompt={prompt}
             onChangePrompt={onChangePrompt}
@@ -46,8 +46,8 @@ export function HomeScreen({ prompt, onChangePrompt, onSend, onOpenProjects, onO
               onOpenConfig?.();
             }}
           />
-        </KeyboardAvoidingView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
     </TouchableWithoutFeedback>
   );
 }
@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'absolute',
-    top: 6,
+    top: 15,
     left: 18,
     zIndex: 3,
   },
@@ -109,5 +109,6 @@ const styles = StyleSheet.create({
   },
   composerWrap: {
     width: '100%',
+    paddingBottom: 30,
   },
 });
