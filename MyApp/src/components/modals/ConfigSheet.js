@@ -1,7 +1,5 @@
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { FontAwesome } from '@expo/vector-icons';
 import { Backdrop } from '../common/Backdrop';
-import { PrimaryButton } from '../common/PrimaryButton';
 import theme from '../../theme/theme';
 
 export function ConfigSheet({ visible, onClose, translateY, overlayOpacity }) {
@@ -20,17 +18,6 @@ export function ConfigSheet({ visible, onClose, translateY, overlayOpacity }) {
             <Text style={styles.configLabel}>Selected model</Text>
             <Text style={styles.configValue}>qwen-2.5-coder-32b</Text>
           </View>
-
-          <PrimaryButton onPress={() => {}} style={styles.githubBtn}>
-            <View style={styles.githubBtnContent}>
-              <FontAwesome name="github" size={18} color={theme.colors.text} />
-              <Text style={styles.githubBtnText}>Connect to GitHub</Text>
-            </View>
-          </PrimaryButton>
-
-          <Text style={styles.sheetHint}>
-            GitHub and model controls are UI placeholders for now.
-          </Text>
         </Animated.View>
       </View>
     </Modal>
@@ -87,23 +74,5 @@ const styles = StyleSheet.create({
   configValue: {
     color: theme.colors.text,
     ...theme.typography.bodyStrong,
-  },
-  githubBtn: {
-    height: 50,
-  },
-  githubBtnContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  githubBtnText: {
-    color: theme.colors.text,
-    ...theme.typography.bodyStrong,
-  },
-  sheetHint: {
-    color: theme.colors.muted,
-    marginTop: 14,
-    ...theme.typography.caption,
-    lineHeight: 18,
   },
 });

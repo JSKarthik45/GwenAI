@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import theme from '../../theme/theme';
 
-export function QRScreen({ prompt, onBack }) {
+export function QRScreen({ prompt, result, onBack }) {
   return (
     <View style={styles.qrWrap}>
       <Pressable style={styles.backButton} onPress={onBack}>
@@ -26,6 +26,15 @@ export function QRScreen({ prompt, onBack }) {
           {prompt || 'Placeholder app prompt'}
         </Text>
       </View>
+
+      {result?.message ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>Backend status</Text>
+          <Text style={styles.summaryText} numberOfLines={4}>
+            {`${result.status || 'pending'} — ${result.message}`}
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }

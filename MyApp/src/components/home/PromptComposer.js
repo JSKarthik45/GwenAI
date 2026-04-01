@@ -3,7 +3,7 @@ import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { PrimaryButton } from '../common/PrimaryButton';
 import theme from '../../theme/theme';
 
-export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig }) {
+export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, sending }) {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
   useEffect(() => {
@@ -41,10 +41,10 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig })
           <PrimaryButton
             onPress={onSend}
             style={[styles.sendButton, keyboardVisible && styles.sendButtonWide]}
-            disabled={!prompt?.trim()}
+            disabled={!prompt?.trim() || sending}
           >
             <Text style={[styles.sendArrow, keyboardVisible && styles.sendTextWide]}>
-              {keyboardVisible ? 'Send' : '➤'}
+              {sending ? '...' : keyboardVisible ? 'Send' : '➤'}
             </Text>
           </PrimaryButton>
         </View>

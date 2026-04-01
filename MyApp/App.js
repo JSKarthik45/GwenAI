@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet } from 'react-native';
+import { Alert, Animated, Easing, StyleSheet } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/components/home/HomeScreen';
 import { ConfigSheet } from './src/components/modals/ConfigSheet';
@@ -11,10 +11,13 @@ import theme from './src/theme/theme';
 
 const DRAWER_WIDTH = 320;
 const SHEET_HEIGHT = 340;
+const API_BASE_URL = 'https://jskarthik45-gwenaibackend.hf.space';
 
 export default function App() {
   const [prompt, setPrompt] = useState('');
   const [lastSentPrompt, setLastSentPrompt] = useState('');
+  const [promptResult, setPromptResult] = useState(null);
+  const [isSending, setIsSending] = useState(false);
   const [screen, setScreen] = useState('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
@@ -42,7 +45,16 @@ export default function App() {
 
   useEffect(() => {
     animatePageIn();
+    wakeBackend();
   }, []);
+
+  const wakeBackend = async () => {
+    try {
+      await fetch(`${API_BASE_URL}/api/wakeBackend`);
+    } catch (error) {
+      console.warn('Wake backend failed', error);
+    }
+  };
 
   const animatePageIn = () => {
     pageAnim.stopAnimation();
@@ -131,11 +143,39 @@ export default function App() {
     ]).start(() => setSheetVisible(false));
   };
 
-  const onSend = () => {
-    setLastSentPrompt(prompt);
-    setPrompt('');
-    setScreen('qr');
-    animatePageIn();
+  const onSend = async () => {
+    const trimmedPrompt = prompt.trim();
+
+    if (!trimmedPrompt || isSending) return;
+
+    setIsSending(true);
+    setPromptResult(null);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/prompt`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt: trimmedPrompt }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Prompt request failed');
+      }
+
+      const data = await response.json();
+      setLastSentPrompt(trimmedPrompt);
+      setPrompt('');
+      setPromptResult(data);
+      setScreen('qr');
+      animatePageIn();
+    } catch (error) {
+      Alert.alert('Prompt failed', 'Unable to send prompt. Please try again.');
+      console.warn('Prompt send error', error);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const onBackHome = () => {
@@ -161,11 +201,12 @@ export default function App() {
               prompt={prompt}
               onChangePrompt={setPrompt}
               onSend={onSend}
+              isSending={isSending}
               onOpenProjects={openDrawer}
               onOpenConfig={openSheet}
             />
           ) : (
-            <QRScreen prompt={lastSentPrompt} onBack={onBackHome} />
+            <QRScreen prompt={lastSentPrompt} result={promptResult} onBack={onBackHome} />
           )}
         </Animated.View>
 

@@ -11,7 +11,7 @@ import {
 import { PromptComposer } from './PromptComposer';
 import theme from '../../theme/theme';
 
-export function HomeScreen({ prompt, onChangePrompt, onSend, onOpenProjects, onOpenConfig }) {
+export function HomeScreen({ prompt, onChangePrompt, onSend, isSending, onOpenProjects, onOpenConfig }) {
   const handleOpenProjects = () => {
     Keyboard.dismiss();
     onOpenProjects?.();
@@ -41,6 +41,7 @@ export function HomeScreen({ prompt, onChangePrompt, onSend, onOpenProjects, onO
             prompt={prompt}
             onChangePrompt={onChangePrompt}
             onSend={onSend}
+            sending={isSending}
             onOpenConfig={() => {
               Keyboard.dismiss();
               onOpenConfig?.();
