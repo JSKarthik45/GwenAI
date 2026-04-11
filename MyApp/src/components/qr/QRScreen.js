@@ -1,40 +1,66 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import theme from '../../theme/theme';
 
-export function QRScreen({ prompt, result, onBack }) {
+export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage, isFetchingQR }) {
+  const isQueuedState =
+    isFetchingQR || result?.status === 'processing' || result?.status === 'queued';
+  const processingMessage =
+    qrMessage || 'Your project is processing. Please check back later to view the QR.';
+
   return (
     <View style={styles.qrWrap}>
       <Pressable style={styles.backButton} onPress={onBack}>
         <Text style={styles.backButtonText}>← Back</Text>
       </Pressable>
 
-      <Text style={styles.qrTitle}>Your Preview Is Ready</Text>
-      <Text style={styles.qrSub}>
-        Scan this placeholder QR in Expo Go to view your generated app.
-      </Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {isQueuedState ? (
+          <View style={styles.processingCard}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={styles.processingTitle}>Processing your project</Text>
+            <Text style={styles.processingText}>{processingMessage}</Text>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.qrTitle}>Your Preview Is Ready</Text>
+            <Text style={styles.qrSub}>Scan this QR in Expo Go to view your generated app.</Text>
 
-      <View style={styles.qrCard}>
-        <View style={styles.qrCodePlaceholder}>
-          <Text style={styles.qrPlaceholderText}>QR PLACEHOLDER</Text>
-        </View>
-        <Text style={styles.qrHint}>expo.dev/preview/placeholder-link</Text>
-      </View>
+            <View style={styles.qrCard}>
+              <View style={styles.qrCodePlaceholder}>
+                <Text style={styles.qrPlaceholderText}>{qrContent ? 'QR AVAILABLE' : 'QR NOT READY'}</Text>
+              </View>
+              <Text style={styles.qrHint}>{qrContent || 'The QR link will appear here once your app is ready.'}</Text>
+            </View>
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Prompt received</Text>
-        <Text style={styles.summaryText} numberOfLines={3}>
-          {prompt || 'Placeholder app prompt'}
-        </Text>
-      </View>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Project</Text>
+              <Text style={styles.summaryText} numberOfLines={2}>
+                {project?.name || 'Latest MVP'}
+              </Text>
+            </View>
 
-      {result?.message ? (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryLabel}>Backend status</Text>
-          <Text style={styles.summaryText} numberOfLines={4}>
-            {`${result.status || 'pending'} — ${result.message}`}
-          </Text>
-        </View>
-      ) : null}
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryLabel}>Prompt received</Text>
+              <Text style={styles.summaryText} numberOfLines={3}>
+                {prompt || 'No prompt available.'}
+              </Text>
+            </View>
+
+            {result?.message ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Backend status</Text>
+                <Text style={styles.summaryText} numberOfLines={4}>
+                  {`${result.status || 'pending'} — ${result.message}`}
+                </Text>
+              </View>
+            ) : null}
+          </>
+        )}
+      </ScrollView>
     </View>
   );
 }
@@ -46,6 +72,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 12,
+  },
+  scrollView: {
+    width: '100%',
+    marginTop: 18,
+  },
+  scrollContent: {
+    width: '100%',
+    alignItems: 'center',
+    paddingBottom: 28,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -65,7 +100,7 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     ...theme.typography.title,
     textAlign: 'center',
-    marginTop: 34,
+    marginTop: 8,
   },
   qrSub: {
     color: theme.colors.muted,
@@ -105,6 +140,33 @@ const styles = StyleSheet.create({
     color: theme.colors.muted,
     marginTop: 12,
     fontSize: 13,
+    textAlign: 'center',
+  },
+  processingCard: {
+    width: '100%',
+    maxWidth: 360,
+    marginTop: 26,
+    backgroundColor: theme.colors.panel,
+    borderColor: theme.colors.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 22,
+    alignItems: 'center',
+  },
+  processingTitle: {
+    color: theme.colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  processingText: {
+    color: theme.colors.muted,
+    ...theme.typography.body,
+    lineHeight: 22,
+    textAlign: 'center',
+    marginTop: 10,
   },
   summaryCard: {
     width: '100%',

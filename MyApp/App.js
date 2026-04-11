@@ -1,22 +1,41 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Animated, Easing, StyleSheet } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { HomeScreen } from './src/components/home/HomeScreen';
 import { ConfigSheet } from './src/components/modals/ConfigSheet';
 import { ProjectsDrawer } from './src/components/modals/ProjectsDrawer';
 import { QRScreen } from './src/components/qr/QRScreen';
-import { projects } from './src/data/projects';
 import theme from './src/theme/theme';
 
 const DRAWER_WIDTH = 320;
 const SHEET_HEIGHT = 340;
 const API_BASE_URL = 'https://jskarthik45-gwenaibackend.hf.space';
+const STORED_USER_ID_KEY = 'stored_user_id';
+const MY_PROJECTS_KEY = 'my_projects';
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const resolveProjectId = (payload) =>
+  payload?.project_id || payload?.projectId || payload?.id || null;
+
+const resolveProjectName = (payload, fallbackPrompt) =>
+  payload?.project_name || payload?.projectName || fallbackPrompt || 'Untitled MVP';
+
+const isValidUserId = (value) => UUID_REGEX.test(String(value || ''));
 
 export default function App() {
   const [prompt, setPrompt] = useState('');
   const [lastSentPrompt, setLastSentPrompt] = useState('');
   const [promptResult, setPromptResult] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [isBootstrappingUser, setIsBootstrappingUser] = useState(true);
+  const [myProjects, setMyProjects] = useState([]);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [qrContent, setQrContent] = useState(null);
+  const [qrMessage, setQrMessage] = useState('');
+  const [isFetchingQR, setIsFetchingQR] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [screen, setScreen] = useState('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -46,7 +65,151 @@ export default function App() {
   useEffect(() => {
     animatePageIn();
     wakeBackend();
+    bootstrapUserAndProjects();
   }, []);
+
+  const bootstrapUserAndProjects = async () => {
+    setIsBootstrappingUser(true);
+
+    try {
+      const [storedUserId, storedProjects] = await Promise.all([
+        AsyncStorage.getItem(STORED_USER_ID_KEY),
+        AsyncStorage.getItem(MY_PROJECTS_KEY),
+      ]);
+
+      if (storedProjects) {
+        const parsedProjects = JSON.parse(storedProjects);
+        if (Array.isArray(parsedProjects)) {
+          setMyProjects(parsedProjects);
+        }
+      }
+
+      if (storedUserId && isValidUserId(storedUserId)) {
+        setUserId(storedUserId);
+        return;
+      }
+
+      if (storedUserId && !isValidUserId(storedUserId)) {
+        await AsyncStorage.removeItem(STORED_USER_ID_KEY);
+      }
+
+      const initResponse = await fetch(`${API_BASE_URL}/api/init-user`);
+      if (!initResponse.ok) {
+        throw new Error('Init user request failed');
+      }
+
+      const initData = await initResponse.json();
+      const freshUserId =
+        initData?.user_id || initData?.userId || initData?.id || initData?.stored_user_id;
+
+      if (!freshUserId) {
+        throw new Error('Init user response missing user id');
+      }
+
+      await AsyncStorage.setItem(STORED_USER_ID_KEY, String(freshUserId));
+      setUserId(String(freshUserId));
+    } catch (error) {
+      console.warn('User bootstrap failed', error);
+      Alert.alert('Connection issue', 'Unable to initialize your user profile. Please try again.');
+    } finally {
+      setIsBootstrappingUser(false);
+    }
+  };
+
+  const persistProjects = async (projectsToStore) => {
+    setMyProjects(projectsToStore);
+    await AsyncStorage.setItem(MY_PROJECTS_KEY, JSON.stringify(projectsToStore));
+  };
+
+  const upsertProject = async (projectPayload, sourcePrompt) => {
+    const projectId = resolveProjectId(projectPayload);
+    if (!projectId) return null;
+
+    const projectName = resolveProjectName(projectPayload, sourcePrompt);
+    const updatedAt = new Date().toISOString();
+
+    const incomingProject = {
+      id: String(projectId),
+      name: String(projectName),
+      updatedAt,
+    };
+
+    const existingIdx = myProjects.findIndex((p) => p.id === incomingProject.id);
+    const nextProjects = [...myProjects];
+
+    if (existingIdx >= 0) {
+      nextProjects[existingIdx] = { ...nextProjects[existingIdx], ...incomingProject };
+    } else {
+      nextProjects.unshift(incomingProject);
+    }
+
+    await persistProjects(nextProjects);
+    return incomingProject;
+  };
+
+  const handleViewQR = async (project) => {
+    if (!project?.id) return;
+
+    setSelectedProject(project);
+    setScreen('qr');
+    animatePageIn();
+
+    const projectId = String(project.id);
+    const localQrKey = `qr_content_${projectId}`;
+
+    try {
+      setIsFetchingQR(true);
+      setQrMessage('');
+
+      const cachedQr = await AsyncStorage.getItem(localQrKey);
+      if (cachedQr) {
+        setQrContent(cachedQr);
+        setPromptResult({ status: 'ready', message: 'Loaded from this device.' });
+        return;
+      }
+
+      if (!userId) {
+        throw new Error('Missing user id for QR fetch');
+      }
+
+      const qrResponse = await fetch(`${API_BASE_URL}/api/get-qr`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ project_id: projectId, user_id: userId }),
+      });
+
+      if (!qrResponse.ok) {
+        throw new Error('QR fetch request failed');
+      }
+
+      const qrData = await qrResponse.json();
+
+      if (qrData?.status === 'processing') {
+        setQrContent(null);
+        setPromptResult(qrData);
+        setQrMessage('Your MVP is being generated. Please check back in a few minutes.');
+        return;
+      }
+
+      const returnedQrContent =
+        qrData?.qr_content || qrData?.qrContent || qrData?.qr_data || qrData?.qrData || null;
+
+      if (!returnedQrContent) {
+        throw new Error('QR payload missing qr content');
+      }
+
+      await AsyncStorage.setItem(localQrKey, String(returnedQrContent));
+      setQrContent(String(returnedQrContent));
+      setPromptResult(qrData);
+    } catch (error) {
+      console.warn('View QR failed', error);
+      setQrMessage('Unable to fetch QR right now. Please try again shortly.');
+    } finally {
+      setIsFetchingQR(false);
+    }
+  };
 
   const wakeBackend = async () => {
     try {
@@ -146,30 +309,73 @@ export default function App() {
   const onSend = async () => {
     const trimmedPrompt = prompt.trim();
 
-    if (!trimmedPrompt || isSending) return;
+    if (!trimmedPrompt || isSending || isBootstrappingUser) return;
+
+    if (!userId) {
+      Alert.alert('Please wait', 'Still initializing your profile. Try again in a moment.');
+      return;
+    }
 
     setIsSending(true);
     setPromptResult(null);
+    setQrContent(null);
+    setQrMessage('');
 
     try {
+      const projectName = trimmedPrompt.split('\n')[0].slice(0, 80).trim() || 'Untitled MVP';
       const response = await fetch(`${API_BASE_URL}/api/prompt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ prompt: trimmedPrompt }),
+        body: JSON.stringify({
+          prompt: trimmedPrompt,
+          project_name: projectName,
+          user_id: userId,
+        }),
       });
 
+      if (response.status === 429) {
+        Alert.alert(
+          'Daily limit reached',
+          'You can create up to 2 apps every 24 hours. Please try again later.'
+        );
+        return;
+      }
+
       if (!response.ok) {
-        throw new Error('Prompt request failed');
+        let details = '';
+
+        try {
+          const errorPayload = await response.json();
+          details =
+            errorPayload?.detail?.[0]?.msg ||
+            errorPayload?.message ||
+            errorPayload?.error ||
+            '';
+        } catch (parseError) {
+          details = '';
+        }
+
+        const errorMessage = details
+          ? `Prompt request failed (${response.status}): ${details}`
+          : `Prompt request failed (${response.status})`;
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      const savedProject = await upsertProject(data, trimmedPrompt);
+
       setLastSentPrompt(trimmedPrompt);
       setPrompt('');
       setPromptResult(data);
-      setScreen('qr');
-      animatePageIn();
+
+      if (savedProject) {
+        await handleViewQR(savedProject);
+      } else {
+        setScreen('qr');
+        animatePageIn();
+      }
     } catch (error) {
       Alert.alert('Prompt failed', 'Unable to send prompt. Please try again.');
       console.warn('Prompt send error', error);
@@ -179,7 +385,10 @@ export default function App() {
   };
 
   const onBackHome = () => {
-    setPrompt('');
+    setPromptResult(null);
+    setQrMessage('');
+    setQrContent(null);
+    setSelectedProject(null);
     setScreen('home');
     animatePageIn();
   };
@@ -188,6 +397,11 @@ export default function App() {
     closeDrawer();
     setScreen('home');
     animatePageIn();
+  };
+
+  const onSelectProject = async (project) => {
+    closeDrawer();
+    await handleViewQR(project);
   };
 
   return (
@@ -206,7 +420,15 @@ export default function App() {
               onOpenConfig={openSheet}
             />
           ) : (
-            <QRScreen prompt={lastSentPrompt} result={promptResult} onBack={onBackHome} />
+            <QRScreen
+              prompt={lastSentPrompt}
+              result={promptResult}
+              onBack={onBackHome}
+              project={selectedProject}
+              qrContent={qrContent}
+              qrMessage={qrMessage}
+              isFetchingQR={isFetchingQR}
+            />
           )}
         </Animated.View>
 
@@ -215,8 +437,9 @@ export default function App() {
           onClose={closeDrawer}
           translateX={drawerX}
           overlayOpacity={drawerOpacity}
-          projects={projects}
+          projects={myProjects}
           onNewTask={onCreateNewMvp}
+          onSelectProject={onSelectProject}
         />
 
         <ConfigSheet

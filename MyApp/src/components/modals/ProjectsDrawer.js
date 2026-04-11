@@ -10,6 +10,7 @@ export function ProjectsDrawer({
   overlayOpacity,
   projects,
   onNewTask,
+  onSelectProject,
 }) {
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
@@ -31,12 +32,23 @@ export function ProjectsDrawer({
             contentContainerStyle={styles.projectListContent}
             showsVerticalScrollIndicator={false}
           >
-            {projects.map((project) => (
-              <Pressable key={project.id} style={styles.projectItem}>
-                <Text style={styles.projectName}>{project.name}</Text>
-                <Text style={styles.projectMeta}>Updated {project.updated}</Text>
-              </Pressable>
-            ))}
+            {projects.length ? (
+              projects.map((project) => (
+                <Pressable
+                  key={project.id}
+                  style={styles.projectItem}
+                  onPress={() => onSelectProject?.(project)}
+                >
+                  <Text style={styles.projectName}>{project.name}</Text>
+                  <Text style={styles.projectMeta}>Tap to open QR</Text>
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.emptyCard}>
+                <Text style={styles.emptyTitle}>No projects yet</Text>
+                <Text style={styles.emptyText}>Create your first MVP to see it here.</Text>
+              </View>
+            )}
           </ScrollView>
 
           <View style={styles.footerRow}>
@@ -139,6 +151,23 @@ const styles = StyleSheet.create({
   projectMeta: {
     color: theme.colors.muted,
     marginTop: 4,
+    ...theme.typography.caption,
+  },
+  emptyCard: {
+    backgroundColor: theme.colors.panel,
+    borderWidth: 1,
+    borderColor: theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+  },
+  emptyTitle: {
+    color: theme.colors.text,
+    ...theme.typography.bodyStrong,
+  },
+  emptyText: {
+    color: theme.colors.muted,
+    marginTop: 6,
     ...theme.typography.caption,
   },
 });
