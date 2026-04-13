@@ -23,6 +23,9 @@ const resolveProjectId = (payload) =>
 const resolveProjectName = (payload, fallbackPrompt) =>
   payload?.project_name || payload?.projectName || fallbackPrompt || 'Untitled MVP';
 
+const resolveQrContent = (payload) =>
+  payload?.qr_content || payload?.qrContent || payload?.qr_data || payload?.qrData || null;
+
 const isValidUserId = (value) => UUID_REGEX.test(String(value || ''));
 
 export default function App() {
@@ -156,15 +159,58 @@ export default function App() {
 
     const projectId = String(project.id);
     const localQrKey = `qr_content_${projectId}`;
+    const localQrResultKey = `qr_result_${projectId}`;
 
     try {
       setIsFetchingQR(true);
       setQrMessage('');
 
-      const cachedQr = await AsyncStorage.getItem(localQrKey);
+      const [cachedQrResultRaw, cachedQr] = await Promise.all([
+        AsyncStorage.getItem(localQrResultKey),
+        AsyncStorage.getItem(localQrKey),
+      ]);
+
+      if (cachedQrResultRaw) {
+        try {
+          const cachedQrResult = JSON.parse(cachedQrResultRaw);
+          const cachedQrContent = resolveQrContent(cachedQrResult) || cachedQr;
+
+          setPromptResult(cachedQrResult);
+          setQrContent(cachedQrContent ? String(cachedQrContent) : null);
+
+          if (
+            cachedQrResult?.status === 'processing' ||
+            cachedQrResult?.status === 'queued' ||
+            !cachedQrContent
+          ) {
+            setQrMessage('Your MVP is being generated. Please check back in a few minutes.');
+          }
+
+          if (cachedQrContent && !resolveQrContent(cachedQrResult)) {
+            await AsyncStorage.setItem(
+              localQrResultKey,
+              JSON.stringify({
+                ...cachedQrResult,
+                qr_content: String(cachedQrContent),
+              })
+            );
+          }
+
+          return;
+        } catch (parseError) {
+          await AsyncStorage.removeItem(localQrResultKey);
+        }
+      }
+
       if (cachedQr) {
         setQrContent(cachedQr);
-        setPromptResult({ status: 'ready', message: 'Loaded from this device.' });
+        const legacyCachedResult = {
+          status: 'ready',
+          message: 'Loaded from this device.',
+          qr_content: String(cachedQr),
+        };
+        setPromptResult(legacyCachedResult);
+        await AsyncStorage.setItem(localQrResultKey, JSON.stringify(legacyCachedResult));
         return;
       }
 
@@ -186,6 +232,8 @@ export default function App() {
 
       const qrData = await qrResponse.json();
 
+      await AsyncStorage.setItem(localQrResultKey, JSON.stringify(qrData));
+
       if (qrData?.status === 'processing') {
         setQrContent(null);
         setPromptResult(qrData);
@@ -193,8 +241,7 @@ export default function App() {
         return;
       }
 
-      const returnedQrContent =
-        qrData?.qr_content || qrData?.qrContent || qrData?.qr_data || qrData?.qrData || null;
+      const returnedQrContent = resolveQrContent(qrData);
 
       if (!returnedQrContent) {
         throw new Error('QR payload missing qr content');
