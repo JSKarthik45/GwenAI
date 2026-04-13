@@ -6,6 +6,14 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
     isFetchingQR || result?.status === 'processing' || result?.status === 'queued';
   const processingMessage =
     qrMessage || 'Your project is processing. Please check back later to view the QR.';
+  const resultData = result?.data || {};
+  const qrMeta = resultData?.qr_code || {};
+  const generatorStatus = resultData?.generator_status || resultData?.status || result?.status;
+  const completedAt = resultData?.completed_at;
+  const outputPath = resultData?.output_path;
+  const projectId = resultData?.project_id || qrMeta?.project_id || project?.id;
+  const snackUrl = qrMeta?.snack_url || qrMeta?.snackUrl;
+  const snackId = qrMeta?.snack_id || qrMeta?.snackId;
   const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
   const isDirectQrImage =
     qrValue.startsWith('http://') || qrValue.startsWith('https://');
@@ -53,18 +61,53 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
             </View>
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Project</Text>
+              <Text style={styles.summaryLabel}>Prompt received</Text>
               <Text style={styles.summaryText} numberOfLines={2}>
                 {project?.name || 'Latest MVP'}
               </Text>
             </View>
 
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Prompt received</Text>
-              <Text style={styles.summaryText} numberOfLines={3}>
-                {prompt || 'No prompt available.'}
-              </Text>
-            </View>
+            {generatorStatus ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Generator status</Text>
+                <Text style={styles.summaryText} numberOfLines={2}>{String(generatorStatus)}</Text>
+              </View>
+            ) : null}
+
+            {completedAt ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Completed at</Text>
+                <Text style={styles.summaryText} numberOfLines={2}>{String(completedAt)}</Text>
+              </View>
+            ) : null}
+
+            {outputPath ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Output path</Text>
+                <Text style={styles.summaryText} numberOfLines={3}>{String(outputPath)}</Text>
+              </View>
+            ) : null}
+
+            {snackUrl ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Snack URL</Text>
+                <Text style={styles.summaryText} numberOfLines={3}>{String(snackUrl)}</Text>
+              </View>
+            ) : null}
+
+            {snackId ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Snack ID</Text>
+                <Text style={styles.summaryText} numberOfLines={2}>{String(snackId)}</Text>
+              </View>
+            ) : null}
+
+            {projectId ? (
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>Project ID</Text>
+                <Text style={styles.summaryText} numberOfLines={2}>{String(projectId)}</Text>
+              </View>
+            ) : null}
 
             {result?.message ? (
               <View style={styles.summaryCard}>
