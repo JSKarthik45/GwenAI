@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import theme from '../../theme/theme';
 
 export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage, isFetchingQR }) {
@@ -6,6 +6,14 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
     isFetchingQR || result?.status === 'processing' || result?.status === 'queued';
   const processingMessage =
     qrMessage || 'Your project is processing. Please check back later to view the QR.';
+  const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
+  const isDirectQrImage =
+    qrValue.startsWith('http://') || qrValue.startsWith('https://');
+  const qrImageUri = qrValue
+    ? isDirectQrImage
+      ? qrValue
+      : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrValue)}`
+    : null;
 
   return (
     <View style={styles.qrWrap}>
@@ -31,7 +39,15 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
 
             <View style={styles.qrCard}>
               <View style={styles.qrCodePlaceholder}>
-                <Text style={styles.qrPlaceholderText}>{qrContent ? 'QR AVAILABLE' : 'QR NOT READY'}</Text>
+                {qrImageUri ? (
+                  <Image
+                    source={{ uri: qrImageUri }}
+                    style={styles.qrImage}
+                    resizeMode="contain"
+                  />
+                ) : (
+                  <Text style={styles.qrPlaceholderText}>QR NOT READY</Text>
+                )}
               </View>
               <Text style={styles.qrHint}>{qrContent || 'The QR link will appear here once your app is ready.'}</Text>
             </View>
@@ -130,6 +146,10 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.qrPanel,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  qrImage: {
+    width: 208,
+    height: 208,
   },
   qrPlaceholderText: {
     color: '#9DB8FF',

@@ -18,12 +18,36 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 const resolveProjectId = (payload) =>
-  payload?.project_id || payload?.projectId || payload?.id || null;
+  payload?.project_id ||
+  payload?.projectId ||
+  payload?.id ||
+  payload?.data?.project_id ||
+  payload?.data?.projectId ||
+  payload?.data?.id ||
+  payload?.data?.qr_code?.project_id ||
+  payload?.data?.qr_code?.projectId ||
+  null;
 
 const resolveProjectName = (payload, fallbackPrompt) =>
-  payload?.project_name || payload?.projectName || fallbackPrompt || 'Untitled MVP';
+  payload?.project_name ||
+  payload?.projectName ||
+  payload?.data?.project_name ||
+  payload?.data?.projectName ||
+  fallbackPrompt ||
+  'Untitled MVP';
 
 const resolveQrContent = (payload) =>
+  payload?.data?.qr_code?.qr_image_url ||
+  payload?.data?.qr_code?.qrImageUrl ||
+  payload?.data?.qr_code?.qr_code ||
+  payload?.data?.qr_image_url ||
+  payload?.data?.qrImageUrl ||
+  payload?.data?.snack_url ||
+  payload?.data?.snackUrl ||
+  payload?.qr_image_url ||
+  payload?.qrImageUrl ||
+  payload?.snack_url ||
+  payload?.snackUrl ||
   payload?.qr_content ||
   payload?.qrContent ||
   payload?.qr_data ||
@@ -32,6 +56,8 @@ const resolveQrContent = (payload) =>
   payload?.data?.qrContent ||
   payload?.data?.qr_data ||
   payload?.data?.qrData ||
+  payload?.data?.qr_code?.snack_url ||
+  payload?.data?.qr_code?.snackUrl ||
   null;
 
 const isValidUserId = (value) => UUID_REGEX.test(String(value || ''));
