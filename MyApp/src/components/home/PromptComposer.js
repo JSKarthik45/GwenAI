@@ -9,7 +9,8 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, s
   const [sendHovered, setSendHovered] = useState(false);
   const { width } = useWindowDimensions();
   const inputRef = useRef(null);
-  
+  const blurResetTimerRef = useRef(null);
+
   const isWeb = Platform.OS === 'web';
   const isWideScreen = isWeb && width > 1024;
 
@@ -20,6 +21,9 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, s
     return () => {
       showSub.remove();
       hideSub.remove();
+      if (blurResetTimerRef.current) {
+        clearTimeout(blurResetTimerRef.current);
+      }
     };
   }, []);
 
@@ -42,10 +46,26 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, s
           value={prompt}
           onChangeText={onChangePrompt}
           onBlur={() => {
+            if (isWeb) {
+              if (blurResetTimerRef.current) {
+                clearTimeout(blurResetTimerRef.current);
+              }
+              blurResetTimerRef.current = setTimeout(() => {
+                setKeyboardVisible(false);
+                blurResetTimerRef.current = null;
+              }, 80);
+              return;
+            }
             setKeyboardVisible(false);
-            if (!isWeb) Keyboard.dismiss();
+            Keyboard.dismiss();
           }}
-          onFocus={() => setKeyboardVisible(true)}
+          onFocus={() => {
+            if (blurResetTimerRef.current) {
+              clearTimeout(blurResetTimerRef.current);
+              blurResetTimerRef.current = null;
+            }
+            setKeyboardVisible(true);
+          }}
           numberOfLines={2}
           multiline
           scrollEnabled={false}
