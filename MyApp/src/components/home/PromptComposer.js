@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Keyboard, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 import { PrimaryButton } from '../common/PrimaryButton';
 import theme from '../../theme/theme';
 
 export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, sending }) {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [configHovered, setConfigHovered] = useState(false);
+  const [sendHovered, setSendHovered] = useState(false);
+  const { width } = useWindowDimensions();
+  const inputRef = useRef(null);
+  
+  const isWeb = Platform.OS === 'web';
+  const isWideScreen = isWeb && width > 1024;
 
   useEffect(() => {
     const showSub = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
@@ -18,37 +25,58 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, s
 
   return (
     <View style={styles.composerDock}>
-      <View style={styles.promptCard}>
+      <Pressable
+        style={[styles.promptCard, isWideScreen && styles.promptCardWide]}
+        onPress={() => {
+          if (isWeb) {
+            inputRef.current?.focus?.();
+            setKeyboardVisible(true);
+          }
+        }}
+      >
         <TextInput
-          style={styles.promptInput}
+          ref={inputRef}
+          style={[styles.promptInput, isWeb && styles.promptInputWeb, isWideScreen && styles.promptInputWide]}
           placeholder="Describe your app idea..."
           placeholderTextColor={theme.colors.muted}
           value={prompt}
           onChangeText={onChangePrompt}
-          onBlur={Keyboard.dismiss}
+          onBlur={() => {
+            setKeyboardVisible(false);
+            if (!isWeb) Keyboard.dismiss();
+          }}
+          onFocus={() => setKeyboardVisible(true)}
           numberOfLines={2}
           multiline
           scrollEnabled={false}
+          editable={true}
         />
 
         <View style={styles.actionRow}>
           {!keyboardVisible && (
-            <Pressable style={styles.configCircle} onPress={onOpenConfig}>
+            <Pressable 
+              style={[styles.configCircle, configHovered && styles.configCircleHovered]}
+              onPress={onOpenConfig}
+              onMouseEnter={() => isWeb && setConfigHovered(true)}
+              onMouseLeave={() => isWeb && setConfigHovered(false)}
+            >
               <Text style={styles.configCircleText}>⚙</Text>
             </Pressable>
           )}
 
           <PrimaryButton
             onPress={onSend}
-            style={[styles.sendButton, keyboardVisible && styles.sendButtonWide]}
+            style={[styles.sendButton, keyboardVisible && styles.sendButtonWide, sendHovered && isWeb && styles.sendButtonHovered]}
             disabled={!prompt?.trim() || sending}
+            onMouseEnter={() => isWeb && setSendHovered(true)}
+            onMouseLeave={() => isWeb && setSendHovered(false)}
           >
             <Text style={[styles.sendArrow, keyboardVisible && styles.sendTextWide]}>
               {sending ? '...' : keyboardVisible ? 'Send' : '➤'}
             </Text>
           </PrimaryButton>
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -69,7 +97,23 @@ const styles = StyleSheet.create({
     paddingRight: 12,
     paddingTop: 12,
     paddingBottom: 10,
+    ...Platform.select({
+      web: {
+        cursor: 'auto',
+        pointerEvents: 'auto',
+      },
+      default: {},
+    }),
   },
+  promptCardWide: Platform.select({
+    web: {
+      minHeight: 160,
+      height: 'auto',
+      paddingVertical: 16,
+      paddingHorizontal: 18,
+    },
+    default: {},
+  }),
   promptInput: {
     width: '100%',
     height: 52,
@@ -80,6 +124,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingRight: 4,
   },
+  promptInputWeb: Platform.select({
+    web: {
+      cursor: 'text',
+      outline: 'none',
+      WebkitAppearance: 'none',
+      appearance: 'none',
+      boxSizing: 'border-box',
+    },
+    default: {},
+  }),
+  promptInputWide: Platform.select({
+    web: {
+      fontSize: 17,
+      lineHeight: 26,
+    },
+    default: {},
+  }),
   actionRow: {
     width: '100%',
     flexDirection: 'row',
@@ -96,6 +157,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  configCircleHovered: Platform.select({
+    web: {
+      backgroundColor: '#354a8a',
+      cursor: 'pointer',
+    },
+    default: {},
+  }),
   configCircleText: {
     color: theme.colors.text,
     fontSize: 20,
@@ -114,6 +182,13 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: theme.radius.md,
   },
+  sendButtonHovered: Platform.select({
+    web: {
+      backgroundColor: '#364f8f',
+      cursor: 'pointer',
+    },
+    default: {},
+  }),
   sendArrow: {
     color: theme.colors.text,
     fontSize: 21,

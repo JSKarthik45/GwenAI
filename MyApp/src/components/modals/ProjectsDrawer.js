@@ -1,4 +1,4 @@
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Backdrop } from '../common/Backdrop';
 import { PrimaryButton } from '../common/PrimaryButton';
 import theme from '../../theme/theme';
@@ -12,6 +12,10 @@ export function ProjectsDrawer({
   onNewTask,
   onSelectProject,
 }) {
+  const { width } = useWindowDimensions();
+  const isWeb = Platform.OS === 'web';
+  const isWideScreen = isWeb && width > 1024;
+
   return (
     <Modal transparent animationType="none" visible={visible} onRequestClose={onClose}>
       <View style={styles.modalRoot}>
@@ -19,10 +23,10 @@ export function ProjectsDrawer({
           <Backdrop opacity={overlayOpacity} />
         </Pressable>
 
-        <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
+        <Animated.View style={[styles.drawer, isWideScreen && styles.drawerWide, { transform: [{ translateX }] }]}>
           <View style={styles.drawerTopRow}>
-            <Text style={styles.drawerTitle}>Projects</Text>
-            <Pressable onPress={onClose} style={styles.closeButton} hitSlop={10}>
+            <Text style={[styles.drawerTitle, isWideScreen && styles.drawerTitleWide]}>Projects</Text>
+            <Pressable onPress={onClose} style={[styles.closeButton, isWideScreen && styles.closeButtonWide]} hitSlop={10}>
               <Text style={styles.closeText}>✕</Text>
             </Pressable>
           </View>
@@ -36,17 +40,17 @@ export function ProjectsDrawer({
               projects.map((project) => (
                 <Pressable
                   key={project.id}
-                  style={styles.projectItem}
+                  style={[styles.projectItem, isWideScreen && styles.projectItemWide]}
                   onPress={() => onSelectProject?.(project)}
                 >
-                  <Text style={styles.projectName}>{project.name}</Text>
-                  <Text style={styles.projectMeta}>Tap to open QR</Text>
+                  <Text style={[styles.projectName, isWideScreen && styles.projectNameWide]}>{project.name}</Text>
+                  <Text style={[styles.projectMeta, isWideScreen && styles.projectMetaWide]}>Tap to open QR</Text>
                 </Pressable>
               ))
             ) : (
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>No projects yet</Text>
-                <Text style={styles.emptyText}>Create your first MVP to see it here.</Text>
+              <View style={[styles.emptyCard, isWideScreen && styles.emptyCardWide]}>
+                <Text style={[styles.emptyTitle, isWideScreen && styles.emptyTitleWide]}>No projects yet</Text>
+                <Text style={[styles.emptyText, isWideScreen && styles.emptyTextWide]}>Create your first MVP to see it here.</Text>
               </View>
             )}
           </ScrollView>
@@ -55,8 +59,8 @@ export function ProjectsDrawer({
             <PrimaryButton
               title="+ New MVP"
               onPress={onNewTask}
-              style={styles.newTaskBtn}
-              textStyle={styles.newTaskBtnText}
+              style={[styles.newTaskBtn, isWideScreen && styles.newTaskBtnWide]}
+              textStyle={[styles.newTaskBtnText, isWideScreen && styles.newTaskBtnTextWide]}
             />
           </View>
 
@@ -83,6 +87,15 @@ const styles = StyleSheet.create({
     paddingTop: 35,
     paddingBottom: 14,
   },
+  drawerWide: Platform.select({
+    web: {
+      width: 430,
+      paddingHorizontal: 20,
+      paddingTop: 44,
+      paddingBottom: 20,
+    },
+    default: {},
+  }),
   drawerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -93,6 +106,13 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     ...theme.typography.section,
   },
+  drawerTitleWide: Platform.select({
+    web: {
+      fontSize: 26,
+      lineHeight: 34,
+    },
+    default: {},
+  }),
   closeButton: {
     width: 32,
     height: 32,
@@ -103,6 +123,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.colors.panel,
   },
+  closeButtonWide: Platform.select({
+    web: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+    },
+    default: {},
+  }),
   closeText: {
     color: theme.colors.text,
     fontSize: 16,
@@ -125,9 +153,24 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     width: '100%',
   },
+  newTaskBtnWide: Platform.select({
+    web: {
+      minHeight: 48,
+      borderRadius: theme.radius.md,
+      paddingVertical: 12,
+    },
+    default: {},
+  }),
   newTaskBtnText: {
     ...theme.typography.bodyStrong,
   },
+  newTaskBtnTextWide: Platform.select({
+    web: {
+      fontSize: 16,
+      lineHeight: 22,
+    },
+    default: {},
+  }),
   projectList: {
     flex: 1,
   },
@@ -144,15 +187,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 12,
   },
+  projectItemWide: Platform.select({
+    web: {
+      paddingHorizontal: 14,
+      paddingVertical: 14,
+      borderRadius: 14,
+    },
+    default: {},
+  }),
   projectName: {
     color: theme.colors.text,
     ...theme.typography.bodyStrong,
   },
+  projectNameWide: Platform.select({
+    web: {
+      fontSize: 16,
+      lineHeight: 22,
+    },
+    default: {},
+  }),
   projectMeta: {
     color: theme.colors.muted,
     marginTop: 4,
     ...theme.typography.caption,
   },
+  projectMetaWide: Platform.select({
+    web: {
+      marginTop: 6,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    default: {},
+  }),
   emptyCard: {
     backgroundColor: theme.colors.panel,
     borderWidth: 1,
@@ -161,13 +227,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 14,
   },
+  emptyCardWide: Platform.select({
+    web: {
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 16,
+    },
+    default: {},
+  }),
   emptyTitle: {
     color: theme.colors.text,
     ...theme.typography.bodyStrong,
   },
+  emptyTitleWide: Platform.select({
+    web: {
+      fontSize: 16,
+      lineHeight: 22,
+    },
+    default: {},
+  }),
   emptyText: {
     color: theme.colors.muted,
     marginTop: 6,
     ...theme.typography.caption,
   },
+  emptyTextWide: Platform.select({
+    web: {
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    default: {},
+  }),
 });
