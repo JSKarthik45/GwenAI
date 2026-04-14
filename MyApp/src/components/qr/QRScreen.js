@@ -1,4 +1,4 @@
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View, Linking } from 'react-native';
 import theme from '../../theme/theme';
 
 export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage, isFetchingQR }) {
@@ -10,6 +10,21 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
   const qrMeta = resultData?.qr_code || {};
   const generatorStatus = resultData?.generator_status || resultData?.status || result?.status;
   const completedAt = resultData?.completed_at;
+  const formattedCompletedAt = (() => {
+    if (!completedAt) return null;
+    const d = new Date(completedAt);
+    if (Number.isNaN(d.getTime())) return String(completedAt);
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZoneName: 'short',
+    });
+    return `${day}-${month}-${year} ${time}`;
+  })();
   const outputPath = resultData?.output_path;
   const projectId = resultData?.project_id || qrMeta?.project_id || project?.id;
   const snackUrl = qrMeta?.snack_url || qrMeta?.snackUrl;
@@ -42,56 +57,43 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
           </View>
         ) : (
           <>
-            <Text style={styles.qrTitle}>Your Preview Is Ready</Text>
-            <Text style={styles.qrSub}>Scan this QR in Expo Go to view your generated app.</Text>
+            <Text style={styles.qrTitle}>Your MVP Is Ready</Text>
+            <Text style={styles.qrSub}>Open It Or Scan With Expo Go To Preview.</Text>
 
-            <View style={styles.qrCard}>
-              <View style={styles.qrCodePlaceholder}>
-                {qrImageUri ? (
-                  <Image
-                    source={{ uri: qrImageUri }}
-                    style={styles.qrImage}
-                    resizeMode="contain"
-                  />
-                ) : (
-                  <Text style={styles.qrPlaceholderText}>QR NOT READY</Text>
-                )}
+            {snackUrl ? (
+              <View style={styles.ctaWrap}>
+                <Pressable style={styles.ctaButton} onPress={() => Linking.openURL(String(snackUrl))}>
+                  <Text style={styles.ctaButtonText}>Open in Expo Go</Text>
+                </Pressable>
+                <Text style={styles.orText}>or</Text>
               </View>
-              <Text style={styles.qrHint}>{qrContent || 'The QR link will appear here once your app is ready.'}</Text>
+            ) : null}
+
+            <View style={styles.qrImageWrap}>
+              {qrImageUri ? (
+                <Image
+                  source={{ uri: qrImageUri }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={styles.qrCodePlaceholder}>
+                  <Text style={styles.qrPlaceholderText}>QR NOT READY</Text>
+                </View>
+              )}
             </View>
 
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Prompt received</Text>
+              <Text style={styles.summaryLabel}>Prompt</Text>
               <Text style={styles.summaryText} numberOfLines={2}>
                 {project?.name || 'Latest MVP'}
               </Text>
             </View>
 
-            {generatorStatus ? (
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Generator status</Text>
-                <Text style={styles.summaryText} numberOfLines={2}>{String(generatorStatus)}</Text>
-              </View>
-            ) : null}
-
             {completedAt ? (
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryLabel}>Completed at</Text>
-                <Text style={styles.summaryText} numberOfLines={2}>{String(completedAt)}</Text>
-              </View>
-            ) : null}
-
-            {outputPath ? (
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Output path</Text>
-                <Text style={styles.summaryText} numberOfLines={3}>{String(outputPath)}</Text>
-              </View>
-            ) : null}
-
-            {snackUrl ? (
-              <View style={styles.summaryCard}>
-                <Text style={styles.summaryLabel}>Snack URL</Text>
-                <Text style={styles.summaryText} numberOfLines={3}>{String(snackUrl)}</Text>
+                <Text style={styles.summaryText} numberOfLines={2}>{formattedCompletedAt}</Text>
               </View>
             ) : null}
 
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
   qrCodePlaceholder: {
     width: 220,
     height: 220,
-    borderRadius: 16,
+    borderRadius: 0,
     borderWidth: 2,
     borderColor: theme.colors.primary,
     backgroundColor: theme.colors.qrPanel,
@@ -197,6 +199,16 @@ const styles = StyleSheet.create({
   qrPlaceholderText: {
     color: '#9DB8FF',
     letterSpacing: 0.8,
+    fontWeight: '700',
+  },
+  qrImageWrap: {
+    marginTop: 18,
+    alignItems: 'center',
+  },
+  orText: {
+    color: theme.colors.muted,
+    marginTop: 10,
+    fontSize: 13,
     fontWeight: '700',
   },
   qrHint: {
@@ -251,5 +263,32 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontSize: 14,
     lineHeight: 20,
+  },
+  link: {
+    color: theme.colors.primary,
+    textDecorationLine: 'underline',
+  },
+  ctaWrap: {
+    width: '100%',
+    maxWidth: 360,
+    marginTop: 14,
+    alignItems: 'center',
+  },
+  ctaButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+  },
+  ctaButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  ctaUrl: {
+    color: theme.colors.muted,
+    marginTop: 8,
+    fontSize: 12,
+    maxWidth: 360,
   },
 });
