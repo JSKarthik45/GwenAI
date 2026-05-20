@@ -41,7 +41,7 @@ export function PromptComposer({ prompt, onChangePrompt, onSend, onOpenConfig, s
         <TextInput
           ref={inputRef}
           style={[styles.promptInput, isWeb && styles.promptInputWeb, isWideScreen && styles.promptInputWide]}
-          placeholder="Describe your app idea..."
+          placeholder="Describe your product idea..."
           placeholderTextColor={theme.colors.muted}
           value={prompt}
           onChangeText={onChangePrompt}

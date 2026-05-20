@@ -36,10 +36,10 @@ export function HomeScreen({ prompt, onChangePrompt, onSend, isSending, onOpenPr
           </Pressable>
 
           <View style={[styles.heroWrap, isWideScreen && styles.heroWrapWide]}>
-            <Text style={[styles.heroTitle, isWideScreen && styles.heroTitleWide]}>Have an idea?</Text>
-            <Text style={[styles.heroTitleAccent, isWideScreen && styles.heroTitleAccentWide]}>View it as an app right now.</Text>
+            <Text style={[styles.heroTitle, isWideScreen && styles.heroTitleWide]}>Have an Idea?</Text>
+            <Text style={[styles.heroTitleAccent, isWideScreen && styles.heroTitleAccentWide]}>View It as an App Right Now.</Text>
             <Text style={[styles.heroSub, isWideScreen && styles.heroSubWide]}>
-              Turn prompts into MVPs in minutes. Describe your app and start building.
+              Turn product ideas into app MVPs in minutes.
             </Text>
           </View>
 
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'absolute',
     top: 15,
-    left: 18,
+    left: 8,
     zIndex: 3,
   },
   menuButtonWide: Platform.select({

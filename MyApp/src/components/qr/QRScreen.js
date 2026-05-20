@@ -1,4 +1,4 @@
-import { ActivityIndicator, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, Linking, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, Linking, useWindowDimensions } from 'react-native';
 import { MaxWidthContainer } from '../common/MaxWidthContainer';
 import theme from '../../theme/theme';
 
@@ -34,6 +34,35 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
   const projectId = resultData?.project_id || qrMeta?.project_id || project?.id;
   const snackUrl = qrMeta?.snack_url || qrMeta?.snackUrl;
   const snackId = qrMeta?.snack_id || qrMeta?.snackId;
+  const handleOpenInExpoGo = async () => {
+    if (!snackUrl) return;
+
+    const targetUrl = String(snackUrl).trim();
+    if (!targetUrl) return;
+
+    if (Platform.OS === 'web') {
+      await Linking.openURL(targetUrl);
+      return;
+    }
+
+    const expoSchemeUrl = targetUrl.startsWith('exp://')
+      ? targetUrl
+      : targetUrl.replace(/^https?:\/\//i, 'exp://');
+
+    const canOpenInExpoGo = expoSchemeUrl.startsWith('exp://')
+      ? await Linking.canOpenURL(expoSchemeUrl)
+      : false;
+
+    if (!canOpenInExpoGo) {
+      Alert.alert(
+        'Install Expo Go',
+        'Please install the Expo Go app to view the instant preview directly on your phone.'
+      );
+      return;
+    }
+
+    await Linking.openURL(expoSchemeUrl);
+  };
   const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
   const isDirectQrImage =
     qrValue.startsWith('http://') || qrValue.startsWith('https://');
@@ -70,7 +99,7 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
                 <View style={[styles.leftPane, isWideScreen && styles.leftPaneWide]}>
                   {snackUrl ? (
                     <View style={[styles.ctaWrap, isWideScreen && styles.ctaWrapWide]}>
-                      <Pressable style={[styles.ctaButton, isWideScreen && styles.ctaButtonWide]} onPress={() => Linking.openURL(String(snackUrl))}>
+                      <Pressable style={[styles.ctaButton, isWideScreen && styles.ctaButtonWide]} onPress={handleOpenInExpoGo}>
                         <Text style={[styles.ctaButtonText, isWideScreen && styles.ctaButtonTextWide]}>Open in Expo Go</Text>
                       </Pressable>
                       <Text style={[styles.orText, isWideScreen && styles.orTextWide]}>or</Text>
