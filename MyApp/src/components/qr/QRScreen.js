@@ -32,26 +32,39 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
   })();
   const outputPath = resultData?.output_path;
   const projectId = resultData?.project_id || qrMeta?.project_id || project?.id;
-  const snackUrl = qrMeta?.snack_url || qrMeta?.snackUrl;
+  const snackUrl = qrMeta?.snack_url || qrMeta?.snackUrl || resultData?.snack_url || resultData?.snackUrl || null;
+  const qrImageUrl = qrMeta?.qr_image_url || qrMeta?.qrImageUrl || resultData?.qr_image_url || resultData?.qrImageUrl || null;
+  const expoGoUrl = qrMeta?.expo_go_url || qrMeta?.expoGoUrl || resultData?.expo_go_url || resultData?.expoGoUrl || null;
   const snackId = qrMeta?.snack_id || qrMeta?.snackId;
   const handleOpenInExpoGo = async () => {
-    if (!snackUrl) return;
+    const targetUrl = typeof expoGoUrl === 'string' ? expoGoUrl.trim() : '';
+    const normalizedTargetUrl = targetUrl.toLowerCase();
 
-    const targetUrl = String(snackUrl).trim();
-    if (!targetUrl) return;
-
-    if (Platform.OS === 'web') {
-      await Linking.openURL(targetUrl);
+    if (!targetUrl) {
+      Alert.alert(
+        'Preview unavailable',
+        'This project is missing the native Expo Go deep link. Please try again later.'
+      );
       return;
     }
 
-    const expoSchemeUrl = targetUrl.startsWith('exp://')
-      ? targetUrl
-      : targetUrl.replace(/^https?:\/\//i, 'exp://');
+    if (!normalizedTargetUrl.startsWith('exp://')) {
+      Alert.alert(
+        'Preview unavailable',
+        'The Expo Go preview is not available because the app is using a browser URL instead of the native deep link.'
+      );
+      return;
+    }
 
-    const canOpenInExpoGo = expoSchemeUrl.startsWith('exp://')
-      ? await Linking.canOpenURL(expoSchemeUrl)
-      : false;
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Open on your phone',
+        'Use the Expo Go app on a mobile device to open this preview.'
+      );
+      return;
+    }
+
+    const canOpenInExpoGo = await Linking.canOpenURL(targetUrl);
 
     if (!canOpenInExpoGo) {
       Alert.alert(
@@ -61,16 +74,16 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
       return;
     }
 
-    await Linking.openURL(expoSchemeUrl);
+    await Linking.openURL(targetUrl);
   };
   const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
   const isDirectQrImage =
     qrValue.startsWith('http://') || qrValue.startsWith('https://');
-  const qrImageUri = qrValue
+  const qrImageUri = qrImageUrl || (qrValue
     ? isDirectQrImage
       ? qrValue
       : `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrValue)}`
-    : null;
+    : null);
 
   return (
     <View style={styles.qrWrap}>
@@ -97,7 +110,7 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
 
               <View style={[styles.desktopMainRow, isWideScreen && styles.desktopMainRowWide]}>
                 <View style={[styles.leftPane, isWideScreen && styles.leftPaneWide]}>
-                  {snackUrl ? (
+                  {expoGoUrl ? (
                     <View style={[styles.ctaWrap, isWideScreen && styles.ctaWrapWide]}>
                       <Pressable style={[styles.ctaButton, isWideScreen && styles.ctaButtonWide]} onPress={handleOpenInExpoGo}>
                         <Text style={[styles.ctaButtonText, isWideScreen && styles.ctaButtonTextWide]}>Open in Expo Go</Text>
