@@ -64,17 +64,28 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
       return;
     }
 
-    const canOpenInExpoGo = await Linking.canOpenURL(targetUrl);
+    try {
+      await Linking.openURL(targetUrl);
+      return;
+    } catch (error) {
+      if (Platform.OS === 'android') {
+        try {
+          const IntentLauncher = require('expo-intent-launcher');
+          await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+            data: targetUrl,
+            packageName: 'host.exp.exponent',
+          });
+          return;
+        } catch (intentError) {
+          console.log('Expo Go launch failed', intentError);
+        }
+      }
 
-    if (!canOpenInExpoGo) {
       Alert.alert(
         'Install Expo Go',
         'Please install the Expo Go app to view the instant preview directly on your phone.'
       );
-      return;
     }
-
-    await Linking.openURL(targetUrl);
   };
   const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
   const isDirectQrImage =
