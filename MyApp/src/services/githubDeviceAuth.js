@@ -213,15 +213,19 @@ export async function startGitHubDeviceAuth({
 export async function pollGitHubAuthStatus({
   baseUrl = DEFAULT_BASE_URL,
   deviceCode,
+  userId,
   fetchImpl = fetch,
 }) {
+  const body = {
+    device_code: deviceCode,
+    ...(userId ? { user_id: String(userId) } : {}),
+  };
+
   const payload = await tryCandidateEndpoints({
     fetchImpl,
     baseUrl,
     method: 'POST',
-    body: {
-      device_code: deviceCode,
-    },
+    body,
     headers: { 'Content-Type': 'application/json' },
     candidates: POLL_AUTH_ENDPOINTS,
   });

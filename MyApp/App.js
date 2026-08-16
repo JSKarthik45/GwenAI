@@ -395,6 +395,12 @@ export default function App() {
   const pollGithubAuthUntilSuccess = async (deviceCode, intervalSeconds = 5) => {
     clearGithubPolling();
 
+    if (!userId) {
+      setGithubStatus(GITHUB_STATE.ERROR);
+      setGithubError('Your user profile is still initializing. Please try again in a moment.');
+      return;
+    }
+
     let sleepSeconds = Math.max(intervalSeconds || 5, 5);
 
     const step = async () => {
@@ -402,6 +408,7 @@ export default function App() {
         const result = await pollGitHubAuthStatus({
           baseUrl: API_BASE_URL,
           deviceCode,
+          userId,
         });
 
         if (result.status === 'success') {
@@ -446,6 +453,12 @@ export default function App() {
     clearGithubPolling();
     setGithubError('');
     setGithubRepoData(null);
+
+    if (!userId) {
+      setGithubStatus(GITHUB_STATE.ERROR);
+      setGithubError('Your user profile is not ready yet. Please wait a moment and try again.');
+      return;
+    }
 
     try {
       const authData = await startGitHubDeviceAuth({
