@@ -1,6 +1,7 @@
 import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View, Linking, useWindowDimensions } from 'react-native';
 import { MaxWidthContainer } from '../common/MaxWidthContainer';
 import theme from '../../theme/theme';
+import { GITHUB_APP_INSTALL_URL } from '../../services/githubDeviceAuth';
 
 export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage, isFetchingQR, onConnectGitHub }) {
   const { width } = useWindowDimensions();
@@ -107,12 +108,25 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
       return;
     }
 
+    try {
+      await Linking.openURL(GITHUB_APP_INSTALL_URL);
+      if (typeof onConnectGitHub === 'function') {
+        Alert.alert(
+          'Install complete',
+          'Once GitHub App installation is complete, tap “Connect GitHub” again to continue with the device-code authorization.'
+        );
+      }
+      return;
+    } catch (error) {
+      console.warn('GitHub app install link failed', error);
+    }
+
     if (typeof onConnectGitHub === 'function') {
       onConnectGitHub();
       return;
     }
 
-    Alert.alert('GitHub not connected', 'Connect GitHub from the settings panel to push this app to a repository.');
+    Alert.alert('GitHub not connected', 'Install the GitHub App first, then complete the device authorization flow.');
   };
   const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
   const isDirectQrImage =

@@ -1,7 +1,7 @@
-import { Animated, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { Backdrop } from '../common/Backdrop';
 import theme from '../../theme/theme';
-import { GITHUB_STATE } from '../../services/githubDeviceAuth';
+import { GITHUB_APP_INSTALL_URL, GITHUB_STATE } from '../../services/githubDeviceAuth';
 
 const GH_STATUS_LABELS = {
   [GITHUB_STATE.IDLE]: 'not connected',
@@ -75,9 +75,24 @@ export function ConfigSheet({
               <Text style={styles.sectionTitle}>Connect GitHub</Text>
 
               {!isConnected && !isPending && (
-                <Pressable style={styles.primaryButton} onPress={onConnectGitHub}>
-                  <Text style={styles.primaryButtonText}>Connect GitHub</Text>
-                </Pressable>
+                <>
+                  <Pressable
+                    style={styles.primaryButton}
+                    onPress={async () => {
+                      try {
+                        await Linking.openURL(GITHUB_APP_INSTALL_URL);
+                      } catch (error) {
+                        console.warn('GitHub app install open failed', error);
+                      }
+                    }}
+                  >
+                    <Text style={styles.primaryButtonText}>Install Gwen AI GitHub App</Text>
+                  </Pressable>
+
+                  <Pressable style={[styles.secondaryButton, styles.secondaryButtonSpacer]} onPress={onConnectGitHub}>
+                    <Text style={styles.secondaryButtonText}>Continue to GitHub authorization</Text>
+                  </Pressable>
+                </>
               )}
 
               {isPending && githubAuth && (
@@ -363,6 +378,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingVertical: 12,
     paddingHorizontal: 10,
+    marginTop: 10,
+  },
+  secondaryButtonSpacer: {
+    marginTop: 10,
   },
   secondaryButtonText: {
     color: theme.colors.text,

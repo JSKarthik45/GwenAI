@@ -1,4 +1,5 @@
 export const GITHUB_CLIENT_ID = 'Iv23lioxhi4h5AOWArq8';
+export const GITHUB_APP_INSTALL_URL = 'https://github.com/apps/gwen-ai-builder/installations/new';
 
 export const GITHUB_STATE = Object.freeze({
   IDLE: 'idle',
