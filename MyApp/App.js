@@ -377,12 +377,15 @@ export default function App() {
       });
 
       setGithubRepoData(repoData);
-      setGithubStatus(GITHUB_STATE.REPO_CREATED);
-
-      if (repoData?.html_url) {
-        setGithubStatus(GITHUB_STATE.PUSH_COMPLETE);
-      }
+      setGithubStatus(repoData?.html_url ? GITHUB_STATE.PUSH_COMPLETE : GITHUB_STATE.REPO_CREATED);
     } catch (error) {
+      const statusCode = Number(error?.status || 0);
+      if (statusCode === 404 || statusCode === 405) {
+        setGithubStatus(GITHUB_STATE.GITHUB_AUTH_SUCCESS);
+        setGithubError('');
+        return;
+      }
+
       console.warn('GitHub repo setup failed', error);
       setGithubStatus(GITHUB_STATE.ERROR);
       setGithubError(getGithubFriendlyErrorMessage('repo_creation_failed', 'Repository creation failed. Please try again.'));
