@@ -18,6 +18,12 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
     result?.github_repo?.url ||
     null;
 
+  const isGithubError = typeof githubRepoUrl === 'string' && githubRepoUrl.startsWith('ERROR:');
+  const githubErrorMessage = isGithubError
+    ? githubRepoUrl.replace(/^ERROR:\s*/, '')
+    : null;
+  const validGithubRepoUrl = isGithubError ? null : githubRepoUrl;
+
   const isQueuedState =
     isFetchingQR || result?.status === 'processing' || result?.status === 'queued';
   const processingMessage =
@@ -99,9 +105,14 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
   };
 
   const handleOpenGithubRepo = async () => {
-    if (githubRepoUrl) {
+    if (isGithubError) {
+      Alert.alert('GitHub Repository Error', githubErrorMessage || 'Repository could not be created.');
+      return;
+    }
+
+    if (validGithubRepoUrl) {
       try {
-        await Linking.openURL(githubRepoUrl);
+        await Linking.openURL(validGithubRepoUrl);
       } catch (error) {
         Alert.alert('Open GitHub failed', 'Unable to open the repository URL right now.');
       }
@@ -171,14 +182,6 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
                     </View>
                   ) : null}
 
-                  <View style={[styles.ctaWrap, isWideScreen && styles.ctaWrapWide]}>
-                    <Pressable style={[styles.githubButton, isWideScreen && styles.githubButtonWide]} onPress={handleOpenGithubRepo}>
-                      <Text style={[styles.githubButtonText, isWideScreen && styles.githubButtonTextWide]}>
-                        {githubRepoUrl ? 'Open GitHub Repo' : 'Connect GitHub'}
-                      </Text>
-                    </Pressable>
-                  </View>
-
                   <View style={[styles.qrImageWrap, isWideScreen && styles.qrImageWrapWide]}>
                     {qrImageUri ? (
                       <Image
@@ -191,6 +194,34 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
                         <Text style={styles.qrPlaceholderText}>QR NOT READY</Text>
                       </View>
                     )}
+                  </View>
+
+                  
+                  <Text style={[styles.qrSub, isWideScreen && styles.qrSubWide, { paddingTop: 10 }]}>View your generated MVP's code.</Text>
+                  <View style={[styles.ctaWrap, isWideScreen && styles.ctaWrapWide]}>
+                    <Pressable
+                      style={[
+                        styles.githubButton,
+                        isWideScreen && styles.githubButtonWide,
+                        isGithubError && styles.githubButtonError,
+                      ]}
+                      onPress={handleOpenGithubRepo}
+                    >
+                      <Text
+                        style={[
+                          styles.githubButtonText,
+                          isWideScreen && styles.githubButtonTextWide,
+                          isGithubError && styles.githubButtonErrorText,
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {isGithubError
+                          ? githubErrorMessage || 'GitHub Error'
+                          : validGithubRepoUrl
+                          ? 'Open GitHub Repo'
+                          : 'Connect GitHub'}
+                      </Text>
+                    </Pressable>
                   </View>
                 </View>
 
@@ -446,8 +477,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 12,
-    width: '100%',
-    maxWidth: 360,
     alignItems: 'center',
   },
   githubButtonWide: Platform.select({ web: { paddingVertical: 12, paddingHorizontal: 24, maxWidth: 420 }, default: {} }),
@@ -457,6 +486,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   githubButtonTextWide: Platform.select({ web: { fontSize: 16 }, default: {} }),
+  githubButtonError: {
+    backgroundColor: '#C73E1D',
+  },
+  githubButtonErrorText: {
+    color: '#FFE5D9',
+  },
   ctaUrl: {
     color: theme.colors.muted,
     marginTop: 8,

@@ -20,6 +20,8 @@ const DRAWER_WIDTH = 320;
 const SHEET_HEIGHT = 340;
 const API_BASE_URL = 'https://jskarthik45-gwenaibackend.hf.space';
 const STORED_USER_ID_KEY = 'stored_user_id';
+const GWEN_USER_KEY = 'gwen_user';
+const GWEN_GITHUB_AUTH_KEY = 'gwen_github_auth';
 const MY_PROJECTS_KEY = 'my_projects';
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -135,6 +137,7 @@ export default function App() {
 
       if (storedUserId && isValidUserId(storedUserId)) {
         setUserId(storedUserId);
+        await AsyncStorage.setItem(GWEN_USER_KEY, JSON.stringify({ userId: String(storedUserId) }));
         return;
       }
 
@@ -155,8 +158,10 @@ export default function App() {
         throw new Error('Init user response missing user id');
       }
 
-      await AsyncStorage.setItem(STORED_USER_ID_KEY, String(freshUserId));
-      setUserId(String(freshUserId));
+      const normalizedUserId = String(freshUserId);
+      await AsyncStorage.setItem(STORED_USER_ID_KEY, normalizedUserId);
+      await AsyncStorage.setItem(GWEN_USER_KEY, JSON.stringify({ userId: normalizedUserId }));
+      setUserId(normalizedUserId);
     } catch (error) {
       console.warn('User bootstrap failed', error);
       Alert.alert('Connection issue', 'Unable to initialize your user profile. Please try again.');
@@ -168,6 +173,21 @@ export default function App() {
   const persistProjects = async (projectsToStore) => {
     setMyProjects(projectsToStore);
     await AsyncStorage.setItem(MY_PROJECTS_KEY, JSON.stringify(projectsToStore));
+  };
+
+  const persistProjectResult = async (projectPayload) => {
+    const projectId = resolveProjectId(projectPayload);
+    if (!projectId) return;
+
+    const projectRecord = {
+      projectId: String(projectId),
+      status: projectPayload?.status || 'completed',
+      qrCode: projectPayload?.data?.qr_code || {},
+      githubRepo: projectPayload?.data?.github_repo || null,
+      githubRepoUrl: projectPayload?.data?.github_repo_url || null,
+    };
+
+    await AsyncStorage.setItem(`gwen_project_${projectId}`, JSON.stringify(projectRecord));
   };
 
   const upsertProject = async (projectPayload, sourcePrompt) => {
@@ -367,28 +387,22 @@ export default function App() {
 
   const handleGitHubConnectSuccess = async () => {
     clearGithubPolling();
-    setGithubStatus(GITHUB_STATE.CREATING_REPO);
+    setGithubStatus(GITHUB_STATE.GITHUB_AUTH_SUCCESS);
     setGithubError('');
 
-    try {
-      const repoData = await triggerGitHubRepoSetup({
-        baseUrl: API_BASE_URL,
-        accessToken: githubAuthData?.access_token || null,
-      });
+    const token = githubAuthData?.access_token || null;
 
-      setGithubRepoData(repoData);
-      setGithubStatus(repoData?.html_url ? GITHUB_STATE.PUSH_COMPLETE : GITHUB_STATE.REPO_CREATED);
-    } catch (error) {
-      const statusCode = Number(error?.status || 0);
-      if (statusCode === 404 || statusCode === 405) {
-        setGithubStatus(GITHUB_STATE.GITHUB_AUTH_SUCCESS);
-        setGithubError('');
-        return;
-      }
+    if (userId && token) {
+      const githubAuthRecord = {
+        userId: String(userId),
+        githubConnected: true,
+        accessToken: String(token),
+        login: githubAuthData?.login || null,
+        avatarUrl: githubAuthData?.avatar_url || githubAuthData?.avatarUrl || null,
+        connectedAt: new Date().toISOString(),
+      };
 
-      console.warn('GitHub repo setup failed', error);
-      setGithubStatus(GITHUB_STATE.ERROR);
-      setGithubError(getGithubFriendlyErrorMessage('repo_creation_failed', 'Repository creation failed. Please try again.'));
+      await AsyncStorage.setItem(GWEN_GITHUB_AUTH_KEY, JSON.stringify(githubAuthRecord));
     }
   };
 
@@ -463,6 +477,7 @@ export default function App() {
     try {
       const authData = await startGitHubDeviceAuth({
         baseUrl: API_BASE_URL,
+        userId,
       });
 
       setGithubAuthData(authData);
@@ -547,6 +562,7 @@ export default function App() {
           prompt: trimmedPrompt,
           project_name: projectName,
           user_id: userId,
+          ...(githubAuthData?.access_token ? { github_access_token: githubAuthData.access_token } : {}),
         }),
       });
 
@@ -580,6 +596,7 @@ export default function App() {
 
       const data = await response.json();
       const savedProject = await upsertProject(data, trimmedPrompt);
+      await persistProjectResult(data);
 
       setLastSentPrompt(trimmedPrompt);
       setPrompt('');

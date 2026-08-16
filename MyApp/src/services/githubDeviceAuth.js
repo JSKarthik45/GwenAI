@@ -1,5 +1,5 @@
 export const GITHUB_CLIENT_ID = 'Iv23lioxhi4h5AOWArq8';
-export const GITHUB_APP_INSTALL_URL = 'https://github.com/apps/gwen-ai-builder/installations/new';
+export const GITHUB_APP_INSTALL_URL = 'https://github.com/apps/gwenai/installations/new';
 
 export const GITHUB_STATE = Object.freeze({
   IDLE: 'idle',
@@ -197,13 +197,17 @@ export const normalizeGithubPollResponse = (payload) => {
 export async function startGitHubDeviceAuth({
   baseUrl = DEFAULT_BASE_URL,
   clientId = GITHUB_CLIENT_ID,
+  userId,
   fetchImpl = fetch,
 }) {
   const payload = await tryCandidateEndpoints({
     fetchImpl,
     baseUrl,
     method: 'POST',
-    body: { client_id: clientId },
+    body: {
+      client_id: clientId,
+      ...(userId ? { user_id: String(userId) } : {}),
+    },
     headers: { 'Content-Type': 'application/json' },
     candidates: DEVICE_AUTH_ENDPOINTS,
   });
