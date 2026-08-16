@@ -2,16 +2,25 @@ import { ActivityIndicator, Alert, Image, Platform, Pressable, ScrollView, Style
 import { MaxWidthContainer } from '../common/MaxWidthContainer';
 import theme from '../../theme/theme';
 
-export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage, isFetchingQR }) {
+export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage, isFetchingQR, onConnectGitHub }) {
   const { width } = useWindowDimensions();
   const isWeb = Platform.OS === 'web';
   const isWideScreen = isWeb && width > 1024;
-  
+
+  const resultData = result?.data || {};
+  const githubRepoUrl =
+    resultData?.github_repo_url ||
+    resultData?.github_repo?.html_url ||
+    resultData?.github_repo?.url ||
+    result?.github_repo_url ||
+    result?.github_repo?.html_url ||
+    result?.github_repo?.url ||
+    null;
+
   const isQueuedState =
     isFetchingQR || result?.status === 'processing' || result?.status === 'queued';
   const processingMessage =
     qrMessage || 'Your project is processing. Please check back later to view the QR.';
-  const resultData = result?.data || {};
   const qrMeta = resultData?.qr_code || {};
   const generatorStatus = resultData?.generator_status || resultData?.status || result?.status;
   const completedAt = resultData?.completed_at;
@@ -87,6 +96,24 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
       );
     }
   };
+
+  const handleOpenGithubRepo = async () => {
+    if (githubRepoUrl) {
+      try {
+        await Linking.openURL(githubRepoUrl);
+      } catch (error) {
+        Alert.alert('Open GitHub failed', 'Unable to open the repository URL right now.');
+      }
+      return;
+    }
+
+    if (typeof onConnectGitHub === 'function') {
+      onConnectGitHub();
+      return;
+    }
+
+    Alert.alert('GitHub not connected', 'Connect GitHub from the settings panel to push this app to a repository.');
+  };
   const qrValue = typeof qrContent === 'string' ? qrContent.trim() : '';
   const isDirectQrImage =
     qrValue.startsWith('http://') || qrValue.startsWith('https://');
@@ -129,6 +156,14 @@ export function QRScreen({ prompt, result, onBack, project, qrContent, qrMessage
                       <Text style={[styles.orText, isWideScreen && styles.orTextWide]}>or</Text>
                     </View>
                   ) : null}
+
+                  <View style={[styles.ctaWrap, isWideScreen && styles.ctaWrapWide]}>
+                    <Pressable style={[styles.githubButton, isWideScreen && styles.githubButtonWide]} onPress={handleOpenGithubRepo}>
+                      <Text style={[styles.githubButtonText, isWideScreen && styles.githubButtonTextWide]}>
+                        {githubRepoUrl ? 'Open GitHub Repo' : 'Connect GitHub'}
+                      </Text>
+                    </Pressable>
+                  </View>
 
                   <View style={[styles.qrImageWrap, isWideScreen && styles.qrImageWrapWide]}>
                     {qrImageUri ? (
@@ -392,6 +427,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   ctaButtonTextWide: Platform.select({ web: { fontSize: 16 }, default: {} }),
+  githubButton: {
+    backgroundColor: '#1F6A46',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+  },
+  githubButtonWide: Platform.select({ web: { paddingVertical: 12, paddingHorizontal: 24, maxWidth: 420 }, default: {} }),
+  githubButtonText: {
+    color: '#F0FFF7',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  githubButtonTextWide: Platform.select({ web: { fontSize: 16 }, default: {} }),
   ctaUrl: {
     color: theme.colors.muted,
     marginTop: 8,

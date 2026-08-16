@@ -630,6 +630,7 @@ export default function App() {
               qrContent={qrContent}
               qrMessage={qrMessage}
               isFetchingQR={isFetchingQR}
+              onConnectGitHub={openSheet}
             />
           )}
         </Animated.View>
