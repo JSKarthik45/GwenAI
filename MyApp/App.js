@@ -7,6 +7,13 @@ import { HomeScreen } from './src/components/home/HomeScreen';
 import { ConfigSheet } from './src/components/modals/ConfigSheet';
 import { ProjectsDrawer } from './src/components/modals/ProjectsDrawer';
 import { QRScreen } from './src/components/qr/QRScreen';
+import {
+  GITHUB_STATE,
+  getGithubFriendlyErrorMessage,
+  pollGitHubAuthStatus,
+  startGitHubDeviceAuth,
+  triggerGitHubRepoSetup,
+} from './src/services/githubDeviceAuth';
 import theme from './src/theme/theme';
 
 const DRAWER_WIDTH = 320;
@@ -77,8 +84,13 @@ export default function App() {
   const [screen, setScreen] = useState('home');
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [sheetVisible, setSheetVisible] = useState(false);
+  const [githubStatus, setGithubStatus] = useState(GITHUB_STATE.IDLE);
+  const [githubAuthData, setGithubAuthData] = useState(null);
+  const [githubRepoData, setGithubRepoData] = useState(null);
+  const [githubError, setGithubError] = useState('');
 
   const pageAnim = useRef(new Animated.Value(0)).current;
+  const githubPollTimerRef = useRef(null);
   const drawerX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const drawerOpacity = useRef(new Animated.Value(0)).current;
   const sheetY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -346,6 +358,112 @@ export default function App() {
     ]).start(() => setDrawerVisible(false));
   };
 
+  const clearGithubPolling = () => {
+    if (githubPollTimerRef.current) {
+      clearTimeout(githubPollTimerRef.current);
+      githubPollTimerRef.current = null;
+    }
+  };
+
+  const handleGitHubConnectSuccess = async () => {
+    clearGithubPolling();
+    setGithubStatus(GITHUB_STATE.CREATING_REPO);
+    setGithubError('');
+
+    try {
+      const repoData = await triggerGitHubRepoSetup({
+        baseUrl: API_BASE_URL,
+        accessToken: githubAuthData?.access_token || null,
+      });
+
+      setGithubRepoData(repoData);
+      setGithubStatus(GITHUB_STATE.REPO_CREATED);
+
+      if (repoData?.html_url) {
+        setGithubStatus(GITHUB_STATE.PUSH_COMPLETE);
+      }
+    } catch (error) {
+      console.warn('GitHub repo setup failed', error);
+      setGithubStatus(GITHUB_STATE.ERROR);
+      setGithubError(getGithubFriendlyErrorMessage('repo_creation_failed', 'Repository creation failed. Please try again.'));
+    }
+  };
+
+  const pollGithubAuthUntilSuccess = async (deviceCode, intervalSeconds = 5) => {
+    clearGithubPolling();
+
+    let sleepSeconds = Math.max(intervalSeconds || 5, 5);
+
+    const step = async () => {
+      try {
+        const result = await pollGitHubAuthStatus({
+          baseUrl: API_BASE_URL,
+          deviceCode,
+        });
+
+        if (result.status === 'success') {
+          setGithubStatus(GITHUB_STATE.GITHUB_AUTH_SUCCESS);
+          await handleGitHubConnectSuccess();
+          return;
+        }
+
+        if (result.status === 'slow_down') {
+          sleepSeconds += 5;
+          setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
+          setGithubError(getGithubFriendlyErrorMessage('slow_down', 'GitHub is asking for a slower polling cadence.'));
+        } else if (result.status === 'authorization_pending') {
+          setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
+          setGithubError('');
+        } else if (result.status === 'expired_token') {
+          setGithubStatus(GITHUB_STATE.ERROR);
+          setGithubError(getGithubFriendlyErrorMessage('expired_token', 'GitHub authorization expired. Please reconnect.'));
+          return;
+        } else if (result.status === 'access_denied') {
+          setGithubStatus(GITHUB_STATE.ERROR);
+          setGithubError(getGithubFriendlyErrorMessage('access_denied', 'GitHub authorization was denied.'));
+          return;
+        } else {
+          setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
+        }
+
+        githubPollTimerRef.current = setTimeout(() => {
+          step();
+        }, sleepSeconds * 1000);
+      } catch (error) {
+        console.warn('GitHub auth polling failed', error);
+        setGithubStatus(GITHUB_STATE.ERROR);
+        setGithubError(getGithubFriendlyErrorMessage('network_error', 'Network error while checking GitHub authorization.'));
+      }
+    };
+
+    await step();
+  };
+
+  const startGitHubDeviceAuthFlow = async () => {
+    clearGithubPolling();
+    setGithubError('');
+    setGithubRepoData(null);
+
+    try {
+      const authData = await startGitHubDeviceAuth({
+        baseUrl: API_BASE_URL,
+      });
+
+      setGithubAuthData(authData);
+      setGithubStatus(GITHUB_STATE.WAITING_FOR_GITHUB_USER_CODE);
+
+      if (authData?.verification_uri) {
+        setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
+      }
+
+      await pollGithubAuthUntilSuccess(authData.device_code, authData.interval || 5);
+    } catch (error) {
+      console.warn('GitHub device auth request failed', error);
+      setGithubStatus(GITHUB_STATE.ERROR);
+      setGithubError(getGithubFriendlyErrorMessage('network_error', 'Unable to start GitHub connection. Please retry.'));
+    }
+  };
+
   const openSheet = () => {
     setSheetVisible(true);
     sheetY.stopAnimation();
@@ -528,6 +646,42 @@ export default function App() {
           onClose={closeSheet}
           translateY={sheetY}
           overlayOpacity={sheetOpacity}
+          githubStatus={githubStatus}
+          githubAuth={githubAuthData}
+          githubError={githubError}
+          githubRepo={githubRepoData}
+          onConnectGitHub={startGitHubDeviceAuthFlow}
+          onOpenGitHubVerification={() => {
+            if (githubAuthData?.verification_uri) {
+              const url = githubAuthData.verification_uri;
+              if (url) {
+                try {
+                  require('react-native/Libraries/Linking/Linking').default.openURL(url);
+                } catch (error) {
+                  console.warn('Unable to open GitHub verification URL', error);
+                }
+              }
+            }
+          }}
+          onCopyRepoUrl={() => {
+            if (githubRepoData?.html_url) {
+              try {
+                const Clipboard = require('react-native').Clipboard;
+                Clipboard.setString(githubRepoData.html_url);
+                Alert.alert('Copied', 'Repository URL copied to clipboard.');
+              } catch (error) {
+                console.warn('Clipboard copy failed', error);
+                Alert.alert('Copy failed', 'Unable to copy the repository URL automatically.');
+              }
+            }
+          }}
+          onDoneGitHubSuccess={() => {
+            setGithubStatus(GITHUB_STATE.IDLE);
+            setGithubError('');
+            setGithubAuthData(null);
+            setGithubRepoData(null);
+            closeSheet();
+          }}
         />
       </SafeAreaView>
     </SafeAreaProvider>
