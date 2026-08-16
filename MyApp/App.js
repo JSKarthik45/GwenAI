@@ -17,7 +17,7 @@ import {
 import theme from './src/theme/theme';
 
 const DRAWER_WIDTH = 320;
-const SHEET_HEIGHT = 340;
+const SHEET_HEIGHT = 440;
 const API_BASE_URL = 'https://jskarthik45-gwenaibackend.hf.space';
 const STORED_USER_ID_KEY = 'stored_user_id';
 const GWEN_USER_KEY = 'gwen_user';
@@ -90,9 +90,11 @@ export default function App() {
   const [githubAuthData, setGithubAuthData] = useState(null);
   const [githubRepoData, setGithubRepoData] = useState(null);
   const [githubError, setGithubError] = useState('');
+  const [githubAccessToken, setGithubAccessToken] = useState(null);
 
   const pageAnim = useRef(new Animated.Value(0)).current;
   const githubPollTimerRef = useRef(null);
+  const qrPollTimerRef = useRef(null);
   const drawerX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const drawerOpacity = useRef(new Animated.Value(0)).current;
   const sheetY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
@@ -117,15 +119,32 @@ export default function App() {
     animatePageIn();
     wakeBackend();
     bootstrapUserAndProjects();
+
+    return () => {
+      clearGithubPolling();
+      if (qrPollTimerRef.current) {
+        clearTimeout(qrPollTimerRef.current);
+        qrPollTimerRef.current = null;
+      }
+    };
   }, []);
 
   const bootstrapUserAndProjects = async () => {
     setIsBootstrappingUser(true);
 
     try {
-      const [storedUserId, storedProjects] = await Promise.all([
+      const [
+        contractUserId,
+        legacyUserId,
+        storedProjects,
+        contractGithubToken,
+        legacyGithubAuth,
+      ] = await Promise.all([
+        AsyncStorage.getItem('gwen_user_id'),
         AsyncStorage.getItem(STORED_USER_ID_KEY),
         AsyncStorage.getItem(MY_PROJECTS_KEY),
+        AsyncStorage.getItem('github_access_token'),
+        AsyncStorage.getItem(GWEN_GITHUB_AUTH_KEY),
       ]);
 
       if (storedProjects) {
@@ -135,36 +154,61 @@ export default function App() {
         }
       }
 
-      if (storedUserId && isValidUserId(storedUserId)) {
-        setUserId(storedUserId);
-        await AsyncStorage.setItem(GWEN_USER_KEY, JSON.stringify({ userId: String(storedUserId) }));
-        return;
+      // 1. Restore or Initialize User ID
+      let finalUserId = null;
+      if (contractUserId && isValidUserId(contractUserId)) {
+        finalUserId = contractUserId;
+      } else if (legacyUserId && isValidUserId(legacyUserId)) {
+        finalUserId = legacyUserId;
+        await AsyncStorage.setItem('gwen_user_id', String(finalUserId));
       }
 
-      if (storedUserId && !isValidUserId(storedUserId)) {
-        await AsyncStorage.removeItem(STORED_USER_ID_KEY);
+      if (!finalUserId) {
+        const initResponse = await fetch(`${API_BASE_URL}/api/init-user`);
+        if (!initResponse.ok) {
+          throw new Error('Init user request failed');
+        }
+
+        const initData = await initResponse.json();
+        const freshUserId =
+          initData?.user_id || initData?.userId || initData?.id || initData?.stored_user_id;
+
+        if (!freshUserId) {
+          throw new Error('Init user response missing user id');
+        }
+
+        finalUserId = String(freshUserId);
+        await AsyncStorage.setItem('gwen_user_id', finalUserId);
+        await AsyncStorage.setItem(STORED_USER_ID_KEY, finalUserId);
+        await AsyncStorage.setItem(GWEN_USER_KEY, JSON.stringify({ userId: finalUserId }));
       }
 
-      const initResponse = await fetch(`${API_BASE_URL}/api/init-user`);
-      if (!initResponse.ok) {
-        throw new Error('Init user request failed');
+      setUserId(finalUserId);
+
+      // 2. Restore GitHub Session
+      let finalGithubToken = null;
+      if (contractGithubToken) {
+        finalGithubToken = contractGithubToken;
+      } else if (legacyGithubAuth) {
+        try {
+          const parsedAuth = JSON.parse(legacyGithubAuth);
+          if (parsedAuth?.accessToken) {
+            finalGithubToken = parsedAuth.accessToken;
+            await AsyncStorage.setItem('github_access_token', String(finalGithubToken));
+          }
+        } catch (e) {
+          console.warn('Failed to parse legacy GitHub auth', e);
+        }
       }
 
-      const initData = await initResponse.json();
-      const freshUserId =
-        initData?.user_id || initData?.userId || initData?.id || initData?.stored_user_id;
-
-      if (!freshUserId) {
-        throw new Error('Init user response missing user id');
+      if (finalGithubToken) {
+        setGithubAccessToken(finalGithubToken);
+        setGithubStatus(GITHUB_STATE.GITHUB_AUTH_SUCCESS);
+        setGithubAuthData({ access_token: finalGithubToken });
       }
-
-      const normalizedUserId = String(freshUserId);
-      await AsyncStorage.setItem(STORED_USER_ID_KEY, normalizedUserId);
-      await AsyncStorage.setItem(GWEN_USER_KEY, JSON.stringify({ userId: normalizedUserId }));
-      setUserId(normalizedUserId);
     } catch (error) {
       console.warn('User bootstrap failed', error);
-      Alert.alert('Connection issue', 'Unable to initialize your user profile. Please try again.');
+      Alert.alert('Connection issue', 'Unable to initialize your profile. Please try again.');
     } finally {
       setIsBootstrappingUser(false);
     }
@@ -188,6 +232,20 @@ export default function App() {
     };
 
     await AsyncStorage.setItem(`gwen_project_${projectId}`, JSON.stringify(projectRecord));
+  };
+
+  const deleteProject = async (projectId) => {
+    try {
+      const updated = myProjects.filter((p) => String(p.id) !== String(projectId));
+      await persistProjects(updated);
+      await Promise.all([
+        AsyncStorage.removeItem(`qr_content_${projectId}`),
+        AsyncStorage.removeItem(`qr_result_${projectId}`),
+        AsyncStorage.removeItem(`gwen_project_${projectId}`),
+      ]);
+    } catch (e) {
+      console.warn('Failed to delete project', e);
+    }
   };
 
   const upsertProject = async (projectPayload, sourcePrompt) => {
@@ -216,6 +274,84 @@ export default function App() {
     return incomingProject;
   };
 
+  const startQrPolling = (projectId) => {
+    if (qrPollTimerRef.current) {
+      clearTimeout(qrPollTimerRef.current);
+      qrPollTimerRef.current = null;
+    }
+
+    setIsFetchingQR(true);
+    setQrMessage('Preparing your MVP application...');
+
+    const poll = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/get-qr`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ project_id: projectId }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`QR fetch failed with status ${response.status}`);
+        }
+
+        const qrData = await response.json();
+
+        if (qrData?.status === 'completed') {
+          setIsFetchingQR(false);
+          setQrMessage('');
+          setPromptResult(qrData);
+
+          const returnedQrContent = resolveQrContent(qrData);
+          if (returnedQrContent) {
+            setQrContent(String(returnedQrContent));
+            await AsyncStorage.setItem(`qr_content_${projectId}`, String(returnedQrContent));
+          } else {
+            setQrContent(null);
+          }
+
+          await AsyncStorage.setItem(`qr_result_${projectId}`, JSON.stringify(qrData));
+          qrPollTimerRef.current = null;
+          return;
+        }
+
+        if (qrData?.status === 'processing' || qrData?.status === 'queued') {
+          setPromptResult(qrData);
+          setQrContent(null);
+          setQrMessage(qrData?.message || 'Your MVP is being generated. Please check back in a few minutes.');
+          qrPollTimerRef.current = setTimeout(poll, 30000);
+          return;
+        }
+
+        if (qrData?.status === 'error' || qrData?.error) {
+          setIsFetchingQR(false);
+          setQrContent(null);
+          setQrMessage('');
+          qrPollTimerRef.current = null;
+
+          await deleteProject(projectId);
+          onBackHome();
+
+          Alert.alert(
+            'Generation Failed',
+            'We are sorry for the inconvenience. Our agents encountered an error while building your application.'
+          );
+          return;
+        }
+
+        setPromptResult(qrData);
+        qrPollTimerRef.current = setTimeout(poll, 30000);
+      } catch (error) {
+        console.warn('QR polling error', error);
+        qrPollTimerRef.current = setTimeout(poll, 30000);
+      }
+    };
+
+    poll();
+  };
+
   const handleViewQR = async (project) => {
     if (!project?.id) return;
 
@@ -239,15 +375,13 @@ export default function App() {
       if (cachedQrResultRaw) {
         try {
           const cachedQrResult = JSON.parse(cachedQrResultRaw);
-          // Only accept persisted results that are completed
           if (cachedQrResult?.status === 'completed') {
             const cachedQrContent = resolveQrContent(cachedQrResult) || cachedQr;
             setPromptResult(cachedQrResult);
             setQrContent(cachedQrContent ? String(cachedQrContent) : null);
+            setIsFetchingQR(false);
             return;
           }
-
-          // Remove non-completed persisted results (we don't persist processing/error states)
           await AsyncStorage.removeItem(localQrResultKey);
         } catch (parseError) {
           await AsyncStorage.removeItem(localQrResultKey);
@@ -255,7 +389,6 @@ export default function App() {
       }
 
       if (cachedQr) {
-        // Legacy QR-only cache exists; promote to a completed-shaped result for compatibility
         const completedCachedResult = {
           status: 'completed',
           data: { qr_content: String(cachedQr) },
@@ -265,61 +398,14 @@ export default function App() {
         setQrContent(cachedQr);
         setPromptResult(completedCachedResult);
         await AsyncStorage.setItem(localQrResultKey, JSON.stringify(completedCachedResult));
+        setIsFetchingQR(false);
         return;
       }
 
-      if (!userId) {
-        throw new Error('Missing user id for QR fetch');
-      }
-
-      const qrResponse = await fetch(`${API_BASE_URL}/api/get-qr`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ project_id: projectId, user_id: userId }),
-      });
-
-      if (!qrResponse.ok) {
-        throw new Error('QR fetch request failed');
-      }
-
-      const qrData = await qrResponse.json();
-
-      if (qrData?.status === 'completed') {
-        // Persist only completed responses
-        await AsyncStorage.setItem(localQrResultKey, JSON.stringify(qrData));
-
-        const returnedQrContent = resolveQrContent(qrData);
-        if (returnedQrContent) {
-          await AsyncStorage.setItem(localQrKey, String(returnedQrContent));
-          setQrContent(String(returnedQrContent));
-        } else {
-          setQrContent(null);
-        }
-
-        setPromptResult(qrData);
-        return;
-      }
-
-      if (qrData?.status === 'processing') {
-        setQrContent(null);
-        setPromptResult(qrData);
-        setQrMessage(qrData?.message || 'Your MVP is being generated. Please check back in a few minutes.');
-        return;
-      }
-
-      // Handle error or unexpected status: surface message, do not persist
-      if (qrData?.status === 'error' || qrData?.error) {
-        setQrContent(null);
-        setPromptResult(qrData);
-        setQrMessage(qrData?.error || 'Unable to fetch QR right now.');
-        return;
-      }
+      startQrPolling(projectId);
     } catch (error) {
       console.warn('View QR failed', error);
       setQrMessage('Unable to fetch QR right now. Please try again shortly.');
-    } finally {
       setIsFetchingQR(false);
     }
   };
@@ -427,36 +513,46 @@ export default function App() {
 
         if (result.status === 'success') {
           setGithubStatus(GITHUB_STATE.GITHUB_AUTH_SUCCESS);
-          await handleGitHubConnectSuccess();
+          setGithubError('');
+
+          if (result.access_token) {
+            setGithubAccessToken(result.access_token);
+            await AsyncStorage.setItem('github_access_token', result.access_token);
+
+            const githubAuthRecord = {
+              userId: String(userId),
+              githubConnected: true,
+              accessToken: String(result.access_token),
+              connectedAt: new Date().toISOString(),
+            };
+            await AsyncStorage.setItem(GWEN_GITHUB_AUTH_KEY, JSON.stringify(githubAuthRecord));
+
+            setGithubAuthData({
+              access_token: result.access_token,
+              message: result.message || 'GitHub authorization succeeded.',
+            });
+          }
           return;
         }
 
-        if (result.status === 'slow_down') {
-          sleepSeconds += 5;
-          setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
-          setGithubError(getGithubFriendlyErrorMessage('slow_down', 'GitHub is asking for a slower polling cadence.'));
-        } else if (result.status === 'authorization_pending') {
+        if (result.status === 'pending') {
           setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
           setGithubError('');
-        } else if (result.status === 'expired_token') {
+          githubPollTimerRef.current = setTimeout(step, sleepSeconds * 1000);
+        } else if (result.status === 'expired') {
           setGithubStatus(GITHUB_STATE.ERROR);
-          setGithubError(getGithubFriendlyErrorMessage('expired_token', 'GitHub authorization expired. Please reconnect.'));
-          return;
-        } else if (result.status === 'access_denied') {
+          setGithubError('Session expired. Please try connecting again.');
+        } else if (result.status === 'error') {
           setGithubStatus(GITHUB_STATE.ERROR);
-          setGithubError(getGithubFriendlyErrorMessage('access_denied', 'GitHub authorization was denied.'));
-          return;
+          setGithubError(result.message || 'GitHub authorization failed.');
         } else {
           setGithubStatus(GITHUB_STATE.GITHUB_AUTH_PENDING);
+          githubPollTimerRef.current = setTimeout(step, sleepSeconds * 1000);
         }
-
-        githubPollTimerRef.current = setTimeout(() => {
-          step();
-        }, sleepSeconds * 1000);
       } catch (error) {
         console.warn('GitHub auth polling failed', error);
         setGithubStatus(GITHUB_STATE.ERROR);
-        setGithubError(getGithubFriendlyErrorMessage('network_error', 'Network error while checking GitHub authorization.'));
+        setGithubError('Network error while checking GitHub authorization.');
       }
     };
 
@@ -562,7 +658,7 @@ export default function App() {
           prompt: trimmedPrompt,
           project_name: projectName,
           user_id: userId,
-          ...(githubAuthData?.access_token ? { github_access_token: githubAuthData.access_token } : {}),
+          github_access_token: githubAccessToken || null,
         }),
       });
 
@@ -595,6 +691,11 @@ export default function App() {
       }
 
       const data = await response.json();
+      const projectId = resolveProjectId(data);
+      if (!projectId) {
+        throw new Error('No project ID returned from prompt submission');
+      }
+
       const savedProject = await upsertProject(data, trimmedPrompt);
       await persistProjectResult(data);
 
@@ -603,11 +704,13 @@ export default function App() {
       setPromptResult(data);
 
       if (savedProject) {
-        await handleViewQR(savedProject);
-      } else {
-        setScreen('qr');
-        animatePageIn();
+        setSelectedProject(savedProject);
       }
+
+      setScreen('qr');
+      animatePageIn();
+
+      startQrPolling(projectId);
     } catch (error) {
       Alert.alert('Prompt failed', 'Unable to send prompt. Please try again.');
       console.warn('Prompt send error', error);
@@ -617,6 +720,10 @@ export default function App() {
   };
 
   const onBackHome = () => {
+    if (qrPollTimerRef.current) {
+      clearTimeout(qrPollTimerRef.current);
+      qrPollTimerRef.current = null;
+    }
     setPromptResult(null);
     setQrMessage('');
     setQrContent(null);
@@ -661,6 +768,7 @@ export default function App() {
               qrMessage={qrMessage}
               isFetchingQR={isFetchingQR}
               onConnectGitHub={openSheet}
+              hasGithubToken={!!githubAccessToken}
             />
           )}
         </Animated.View>
@@ -685,6 +793,17 @@ export default function App() {
           githubError={githubError}
           githubRepo={githubRepoData}
           onConnectGitHub={startGitHubDeviceAuthFlow}
+          githubAccessToken={githubAccessToken}
+          onDisconnectGitHub={async () => {
+            setGithubAccessToken(null);
+            setGithubStatus(GITHUB_STATE.IDLE);
+            setGithubAuthData(null);
+            setGithubRepoData(null);
+            setGithubError('');
+            await AsyncStorage.removeItem('github_access_token');
+            await AsyncStorage.removeItem(GWEN_GITHUB_AUTH_KEY);
+            Alert.alert('Disconnected', 'Disconnected from GitHub account.');
+          }}
           onOpenGitHubVerification={() => {
             if (githubAuthData?.verification_uri) {
               const url = githubAuthData.verification_uri;

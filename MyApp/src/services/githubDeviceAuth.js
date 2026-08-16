@@ -24,306 +24,6 @@ export const GITHUB_ERROR_MESSAGES = Object.freeze({
 });
 
 const DEFAULT_BASE_URL = 'https://jskarthik45-gwenaibackend.hf.space';
-const DEVICE_AUTH_ENDPOINTS = [
-  '/api/github/device-auth',
-  '/api/github/device',
-  '/api/github/device-flow',
-  '/api/auth/github/device',
-  '/api/auth/github/device-flow',
-];
-const POLL_AUTH_ENDPOINTS = [
-  '/api/github/device-auth/status',
-  '/api/github/device-status',
-  '/api/github/device-flow/status',
-  '/api/auth/github/device/status',
-];
-
-const withBaseUrl = (baseUrl, path) => {
-  const normalizedBase = `${String(baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '')}`;
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-  return `${normalizedBase}${normalizedPath}`;
-};
-
-const readJson = async (response) => {
-  const text = await response.text();
-
-  if (!text) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch (error) {
-    return text;
-  }
-};
-
-const parseErrorFromPayload = (payload) => {
-  if (!payload || typeof payload !== 'object') {
-    return null;
-  }
-
-  return (
-    payload?.error_description ||
-    payload?.message ||
-    payload?.error ||
-    payload?.detail ||
-    payload?.errors?.[0]?.message ||
-    null
-  );
-};
-
-const requestJson = async ({
-  fetchImpl = fetch,
-  url,
-  method = 'GET',
-  headers = {},
-  body,
-}) => {
-  const response = await fetchImpl(url, {
-    method,
-    headers: {
-      Accept: 'application/json',
-      ...headers,
-    },
-    ...(body !== undefined ? { body: typeof body === 'string' ? body : JSON.stringify(body) } : {}),
-  });
-
-  const payload = await readJson(response);
-
-  if (!response.ok) {
-    const errMessage = parseErrorFromPayload(payload) || `Request failed with status ${response.status}`;
-    const error = new Error(errMessage);
-    error.status = response.status;
-    error.payload = payload;
-    throw error;
-  }
-
-  return payload;
-};
-
-const tryCandidateEndpoints = async ({
-  fetchImpl,
-  baseUrl,
-  candidates,
-  method,
-  body,
-  headers,
-}) => {
-  let lastError = null;
-
-  for (const candidate of candidates) {
-    try {
-      return await requestJson({
-        fetchImpl,
-        url: withBaseUrl(baseUrl, candidate),
-        method,
-        body,
-        headers,
-      });
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error('No GitHub backend endpoint responded successfully.');
-};
-
-export const normalizeGithubDeviceAuthResponse = (payload) => {
-  const deviceCode = payload?.device_code || payload?.deviceCode || payload?.data?.device_code || null;
-  const userCode = payload?.user_code || payload?.userCode || payload?.data?.user_code || null;
-  const verificationUri =
-    payload?.verification_uri ||
-    payload?.verificationUri ||
-    payload?.data?.verification_uri ||
-    payload?.verification_url ||
-    payload?.verificationUrl ||
-    null;
-  const interval = Number(payload?.interval ?? payload?.data?.interval ?? 5);
-
-  if (!deviceCode || !userCode || !verificationUri) {
-    throw new Error('GitHub device auth response is missing device_code, user_code, or verification_uri.');
-  }
-
-  return {
-    device_code: String(deviceCode),
-    user_code: String(userCode),
-    verification_uri: String(verificationUri),
-    interval: Number.isFinite(interval) && interval > 0 ? interval : 5,
-    raw: payload,
-  };
-};
-
-export const normalizeGithubPollResponse = (payload) => {
-  const directStatus = payload?.status || payload?.auth_status || payload?.state || null;
-  const error = payload?.error || payload?.auth_error || null;
-  const accessToken = payload?.access_token || payload?.accessToken || payload?.token || payload?.data?.access_token || null;
-
-  if (accessToken) {
-    return {
-      status: 'success',
-      access_token: accessToken,
-      raw: payload,
-    };
-  }
-
-  if (directStatus === 'success' || directStatus === 'authorized' || payload?.authorized === true) {
-    return { status: 'success', access_token: accessToken, raw: payload };
-  }
-
-  if (directStatus === 'pending' || directStatus === 'authorization_pending' || error === 'authorization_pending') {
-    return { status: 'authorization_pending', raw: payload };
-  }
-
-  if (directStatus === 'slow_down' || error === 'slow_down') {
-    return { status: 'slow_down', raw: payload };
-  }
-
-  if (directStatus === 'expired' || directStatus === 'expired_token' || error === 'expired_token') {
-    return { status: 'expired_token', raw: payload };
-  }
-
-  if (directStatus === 'access_denied' || error === 'access_denied') {
-    return { status: 'access_denied', raw: payload };
-  }
-
-  if (directStatus === 'error') {
-    return { status: 'error', raw: payload };
-  }
-
-  return { status: 'authorization_pending', raw: payload };
-};
-
-export async function startGitHubDeviceAuth({
-  baseUrl = DEFAULT_BASE_URL,
-  clientId = GITHUB_CLIENT_ID,
-  userId,
-  fetchImpl = fetch,
-}) {
-  const payload = await tryCandidateEndpoints({
-    fetchImpl,
-    baseUrl,
-    method: 'POST',
-    body: {
-      client_id: clientId,
-      ...(userId ? { user_id: String(userId) } : {}),
-    },
-    headers: { 'Content-Type': 'application/json' },
-    candidates: DEVICE_AUTH_ENDPOINTS,
-  });
-
-  return normalizeGithubDeviceAuthResponse(payload);
-}
-
-export async function pollGitHubAuthStatus({
-  baseUrl = DEFAULT_BASE_URL,
-  deviceCode,
-  userId,
-  fetchImpl = fetch,
-}) {
-  const body = {
-    device_code: deviceCode,
-    ...(userId ? { user_id: String(userId) } : {}),
-  };
-
-  const payload = await tryCandidateEndpoints({
-    fetchImpl,
-    baseUrl,
-    method: 'POST',
-    body,
-    headers: { 'Content-Type': 'application/json' },
-    candidates: POLL_AUTH_ENDPOINTS,
-  });
-
-  return normalizeGithubPollResponse(payload);
-}
-
-export async function triggerGitHubRepoSetup({
-  baseUrl = DEFAULT_BASE_URL,
-  fetchImpl = fetch,
-  repoName = 'gwen-ai-generated-mvp',
-  description = 'React Native MVP generated by Gwen AI',
-  accessToken,
-}) {
-  const endpoints = [
-    '/api/github/create-repo',
-    '/api/github/repo/create',
-    '/api/github/repository/create',
-    '/api/github/setup-repo',
-    '/api/github/push',
-  ];
-
-  let lastError = null;
-
-  for (const endpoint of endpoints) {
-    try {
-      const payload = await requestJson({
-        fetchImpl,
-        url: `${baseUrl}${endpoint}`,
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-        },
-        body: {
-          name: repoName,
-          private: true,
-          description,
-          auto_init: true,
-        },
-      });
-
-      return {
-        name: payload?.name || repoName,
-        html_url: payload?.html_url || payload?.clone_url || payload?.repository_url || '',
-        private: payload?.private ?? true,
-        owner: payload?.owner?.login || payload?.owner_login || null,
-        raw: payload,
-      };
-    } catch (error) {
-      lastError = error;
-      const statusCode = Number(error?.status || 0);
-      if (statusCode === 404 || statusCode === 405) {
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  if (lastError) {
-    throw lastError;
-  }
-
-  return {
-    name: repoName,
-    html_url: '',
-    private: true,
-    owner: null,
-    raw: null,
-  };
-}
-
-export function buildGitTreePayload(fileMap, baseTreeSha = null) {
-  const treeEntries = [];
-  const iterator = fileMap instanceof Map ? fileMap.entries() : Object.entries(fileMap || {});
-
-  for (const [filePath, fileContent] of iterator) {
-    const rawContent = fileContent == null ? '' : String(fileContent);
-    treeEntries.push({
-      path: String(filePath),
-      mode: '100644',
-      type: 'blob',
-      content: rawContent,
-    });
-  }
-
-  const payload = { tree: treeEntries };
-  if (baseTreeSha) {
-    payload.base_tree = baseTreeSha;
-  }
-
-  return payload;
-}
 
 export function getGithubFriendlyErrorMessage(code, fallback) {
   if (!code) {
@@ -339,4 +39,86 @@ export function getGithubFriendlyErrorMessage(code, fallback) {
   }
 
   return fallback || 'Something went wrong while connecting GitHub.';
+}
+
+export async function startGitHubDeviceAuth({
+  baseUrl = DEFAULT_BASE_URL,
+  clientId = GITHUB_CLIENT_ID,
+  userId,
+}) {
+  const url = `${baseUrl.replace(/\/+$/, '')}/api/github/device-auth`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      user_id: String(userId),
+      client_id: clientId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Device auth request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  if (!payload?.device_code || !payload?.user_code || !payload?.verification_uri) {
+    throw new Error('Device auth response missing required parameters');
+  }
+
+  return {
+    device_code: String(payload.device_code),
+    user_code: String(payload.user_code),
+    verification_uri: String(payload.verification_uri),
+    interval: Number(payload.interval || 5),
+    message: payload.message || '',
+    raw: payload,
+  };
+}
+
+export async function pollGitHubAuthStatus({
+  baseUrl = DEFAULT_BASE_URL,
+  deviceCode,
+  userId,
+}) {
+  const url = `${baseUrl.replace(/\/+$/, '')}/api/github/device-auth/status`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      user_id: String(userId),
+      device_code: String(deviceCode),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Device auth status request failed with status ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const status = payload?.status || 'error';
+
+  return {
+    status: String(status),
+    access_token: payload?.access_token || null,
+    message: payload?.message || '',
+    raw: payload,
+  };
+}
+
+// Deprecated on frontend since repo setup and push are handled directly by the backend prompt generation.
+// Kept for signature compatibility in App.js imports.
+export async function triggerGitHubRepoSetup() {
+  return {
+    name: '',
+    html_url: '',
+    private: true,
+    owner: null,
+    raw: null,
+  };
 }
